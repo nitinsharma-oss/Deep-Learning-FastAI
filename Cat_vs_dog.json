@@ -1,0 +1,361 @@
+{
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "pygments_lexer": "ipython3",
+      "nbconvert_exporter": "python",
+      "version": "3.6.4",
+      "file_extension": ".py",
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "name": "python",
+      "mimetype": "text/x-python"
+    },
+    "colab": {
+      "provenance": [],
+      "gpuType": "T4"
+    },
+    "accelerator": "GPU"
+  },
+  "nbformat_minor": 0,
+  "nbformat": 4,
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Saving a Cats v Dogs Model"
+      ],
+      "metadata": {
+        "id": "98d53c05"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "This is a minimal example showing how to train a fastai model on Kaggle/Colab, and save it so you can use it in your app."
+      ],
+      "metadata": {
+        "id": "7Es-UbxPtrPH"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "# Make sure we've got the latest version of fastai:\n",
+        "!pip install -Uqq fastai"
+      ],
+      "metadata": {
+        "id": "evvA0fqvSblq",
+        "_kg_hide-input": true,
+        "_kg_hide-output": true,
+        "execution": {
+          "iopub.status.busy": "2022-05-03T05:51:37.948558Z",
+          "iopub.execute_input": "2022-05-03T05:51:37.949032Z",
+          "iopub.status.idle": "2022-05-03T05:51:59.531217Z",
+          "shell.execute_reply.started": "2022-05-03T05:51:37.948947Z",
+          "shell.execute_reply": "2022-05-03T05:51:59.530294Z"
+        },
+        "trusted": true
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "First, import all the stuff we need from fastai:"
+      ],
+      "metadata": {
+        "id": "A3tklPi1trPM"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "from fastai.vision.all import *"
+      ],
+      "metadata": {
+        "id": "44eb0ad3",
+        "execution": {
+          "iopub.status.busy": "2022-05-03T05:51:59.533878Z",
+          "iopub.execute_input": "2022-05-03T05:51:59.534478Z",
+          "iopub.status.idle": "2022-05-03T05:52:02.177975Z",
+          "shell.execute_reply.started": "2022-05-03T05:51:59.534432Z",
+          "shell.execute_reply": "2022-05-03T05:52:02.177267Z"
+        },
+        "trusted": true
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Download and decompress our dataset, which is pictures of dogs and cats:"
+      ],
+      "metadata": {
+        "id": "KfxwT7EZtrPO"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "path = untar_data(URLs.PETS)/'images'"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-05-03T05:52:02.180192Z",
+          "iopub.execute_input": "2022-05-03T05:52:02.180691Z",
+          "iopub.status.idle": "2022-05-03T05:53:02.465242Z",
+          "shell.execute_reply.started": "2022-05-03T05:52:02.180651Z",
+          "shell.execute_reply": "2022-05-03T05:53:02.464516Z"
+        },
+        "trusted": true,
+        "id": "FGvg9p-OtrPO",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 37
+        },
+        "outputId": "51e52f34-b805-43af-bd86-9208a8932597"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<IPython.core.display.HTML object>"
+            ],
+            "text/html": [
+              "\n",
+              "<style>\n",
+              "    progress { appearance: none; border: none; border-radius: 4px; width: 300px;\n",
+              "        height: 20px; vertical-align: middle; background: #e0e0e0; }\n",
+              "\n",
+              "    progress::-webkit-progress-bar { background: #e0e0e0; border-radius: 4px; }\n",
+              "    progress::-webkit-progress-value { background: #2196F3; border-radius: 4px; }\n",
+              "    progress::-moz-progress-bar { background: #2196F3; border-radius: 4px; }\n",
+              "\n",
+              "    progress:not([value]) {\n",
+              "        background: repeating-linear-gradient(45deg, #7e7e7e, #7e7e7e 10px, #5c5c5c 10px, #5c5c5c 20px); }\n",
+              "\n",
+              "    progress.progress-bar-interrupted::-webkit-progress-value { background: #F44336; }\n",
+              "    progress.progress-bar-interrupted::-moz-progress-value { background: #F44336; }\n",
+              "    progress.progress-bar-interrupted::-webkit-progress-bar { background: #F44336; }\n",
+              "    progress.progress-bar-interrupted::-moz-progress-bar { background: #F44336; }\n",
+              "    progress.progress-bar-interrupted { background: #F44336; }    \n",
+              "\n",
+              "    table.fastprogress { border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }\n",
+              "    table.fastprogress th, table.fastprogress td { padding: 8px 12px; border: 1px solid #ddd; text-align: left; }\n",
+              "    table.fastprogress thead tr { background: #f8f9fa; font-weight: bold; }\n",
+              "    table.fastprogress tbody tr:nth-of-type(even) { background: #f8f9fa; }\n",
+              "</style>\n"
+            ]
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<div><progress max=\"811706944\" value=\"811712512\"></progress> 100.00% [811712512/811706944 00:33&lt;00:00]</div>"
+            ],
+            "text/html": [
+              "<div><progress max=\"811706944\" value=\"811712512\"></progress> 100.00% [811712512/811706944 00:33&lt;00:00]</div>"
+            ],
+            "text/markdown": "```html\n<div>\n<progress max=\"811706944\" value=\"811712512\"></progress> 100.00% [811712512/811706944 00:33&lt;00:00]</div>\n\n```"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "We need a way to label our images as dogs or cats. In this dataset, pictures of cats are given a filename that starts with a capital letter:"
+      ],
+      "metadata": {
+        "id": "B_bVWG_ZtrPP"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "def is_cat(x): return x[0].isupper()"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-05-03T05:53:02.467289Z",
+          "iopub.execute_input": "2022-05-03T05:53:02.467572Z",
+          "iopub.status.idle": "2022-05-03T05:53:02.474701Z",
+          "shell.execute_reply.started": "2022-05-03T05:53:02.467536Z",
+          "shell.execute_reply": "2022-05-03T05:53:02.474109Z"
+        },
+        "trusted": true,
+        "id": "0rwxH7cKtrPQ"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Now we can create our `DataLoaders`:"
+      ],
+      "metadata": {
+        "id": "2_-d_bE_trPS"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "dls = ImageDataLoaders.from_name_func(\n",
+        "    '.',\n",
+        "    get_image_files(path),\n",
+        "    valid_pct=0.2,\n",
+        "    seed=42,\n",
+        "    label_func=is_cat,\n",
+        "    item_tfms=Resize(192)\n",
+        "  )"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-05-03T05:53:02.475754Z",
+          "iopub.execute_input": "2022-05-03T05:53:02.476084Z",
+          "iopub.status.idle": "2022-05-03T05:53:06.703777Z",
+          "shell.execute_reply.started": "2022-05-03T05:53:02.476052Z",
+          "shell.execute_reply": "2022-05-03T05:53:06.703023Z"
+        },
+        "trusted": true,
+        "id": "y7hNGlT8trPT"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "... and train our model, a resnet18 (to keep it small and fast):"
+      ],
+      "metadata": {
+        "id": "Re0JZ60-trPU"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "learn = vision_learner(dls, resnet18, metrics=error_rate)\n",
+        "learn.fine_tune(3)"
+      ],
+      "metadata": {
+        "id": "c107f724",
+        "execution": {
+          "iopub.status.busy": "2022-05-03T05:53:28.092381Z",
+          "iopub.execute_input": "2022-05-03T05:53:28.093059Z"
+        },
+        "trusted": true,
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 179
+        },
+        "outputId": "a1a0ea72-d9b1-4696-a41c-e356d2eb9930"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "Downloading: \"https://download.pytorch.org/models/resnet18-f37072fd.pth\" to /root/.cache/torch/hub/checkpoints/resnet18-f37072fd.pth\n"
+          ]
+        },
+        {
+          "output_type": "stream",
+          "name": "stderr",
+          "text": [
+            "100%|██████████| 44.7M/44.7M [00:00<00:00, 192MB/s]\n"
+          ]
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<div><table class=\"fastprogress\"><thead><tr><th>epoch</th><th>train_loss</th><th>valid_loss</th><th>error_rate</th><th>time</th></tr></thead><tbody><tr><td>0</td><td>0.197764</td><td>0.047947</td><td>0.017591</td><td>00:36</td></tr></tbody></table></div>"
+            ],
+            "text/html": [
+              "<div><table class=\"fastprogress\"><thead><tr><th>epoch</th><th>train_loss</th><th>valid_loss</th><th>error_rate</th><th>time</th></tr></thead><tbody><tr><td>0</td><td>0.197764</td><td>0.047947</td><td>0.017591</td><td>00:36</td></tr></tbody></table></div>"
+            ],
+            "text/markdown": "```html\n<div>\n  <table class=\"fastprogress\">\n    <thead>\n      <tr>\n        <th>epoch</th>\n        <th>train_loss</th>\n        <th>valid_loss</th>\n        <th>error_rate</th>\n        <th>time</th>\n      </tr>\n    </thead>\n    <tbody>\n      <tr>\n        <td>0</td>\n        <td>0.197764</td>\n        <td>0.047947</td>\n        <td>0.017591</td>\n        <td>00:36</td>\n      </tr>\n    </tbody>\n  </table>\n</div>\n\n```"
+          },
+          "metadata": {}
+        },
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<div><table class=\"fastprogress\"><thead><tr><th>epoch</th><th>train_loss</th><th>valid_loss</th><th>error_rate</th><th>time</th></tr></thead><tbody><tr><td>0</td><td>0.055692</td><td>0.056244</td><td>0.014208</td><td>00:40</td></tr><tr><td>1</td><td>0.042864</td><td>0.023773</td><td>0.008119</td><td>00:39</td></tr><tr><td>2</td><td>0.026788</td><td>0.026101</td><td>0.007442</td><td>00:41</td></tr></tbody></table></div>"
+            ],
+            "text/html": [
+              "<div><table class=\"fastprogress\"><thead><tr><th>epoch</th><th>train_loss</th><th>valid_loss</th><th>error_rate</th><th>time</th></tr></thead><tbody><tr><td>0</td><td>0.055692</td><td>0.056244</td><td>0.014208</td><td>00:40</td></tr><tr><td>1</td><td>0.042864</td><td>0.023773</td><td>0.008119</td><td>00:39</td></tr><tr><td>2</td><td>0.026788</td><td>0.026101</td><td>0.007442</td><td>00:41</td></tr></tbody></table></div>"
+            ],
+            "text/markdown": "```html\n<div>\n  <table class=\"fastprogress\">\n    <thead>\n      <tr>\n        <th>epoch</th>\n        <th>train_loss</th>\n        <th>valid_loss</th>\n        <th>error_rate</th>\n        <th>time</th>\n      </tr>\n    </thead>\n    <tbody>\n      <tr>\n        <td>0</td>\n        <td>0.055692</td>\n        <td>0.056244</td>\n        <td>0.014208</td>\n        <td>00:40</td>\n      </tr>\n      <tr>\n        <td>1</td>\n        <td>0.042864</td>\n        <td>0.023773</td>\n        <td>0.008119</td>\n        <td>00:39</td>\n      </tr>\n      <tr>\n        <td>2</td>\n        <td>0.026788</td>\n        <td>0.026101</td>\n        <td>0.007442</td>\n        <td>00:41</td>\n      </tr>\n    </tbody>\n  </table>\n</div>\n\n```"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Now we can export our trained `Learner`. This contains all the information needed to run the model:"
+      ],
+      "metadata": {
+        "id": "iHnslW9_trPV"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "learn.export('model.pkl')"
+      ],
+      "metadata": {
+        "id": "ae2bc6ac",
+        "trusted": true
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "> `Kaggle:` Finally, open the Kaggle sidebar on the right if it's not already, and find the section marked \"Output\". Open the `/kaggle/working` folder, and you'll see `model.pkl`. Click on it, then click on the menu on the right that appears, and choose \"Download\"."
+      ],
+      "metadata": {
+        "id": "Q2HTrQKTf3BV"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "> `Colab:` The exported model is saved in the **Files** panel on the left side of the Colab interface. You can open the panel, locate `model.pkl` under `/content`, right-click it (or use the three-dot menu), and choose **Download**."
+      ],
+      "metadata": {
+        "id": "X1F5dN8cpy5i"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "After a few seconds, your model will be downloaded to your computer, where you can then create your app that uses the model."
+      ],
+      "metadata": {
+        "id": "ykRZ9SRFqKe4"
+      }
+    }
+  ]
+}
