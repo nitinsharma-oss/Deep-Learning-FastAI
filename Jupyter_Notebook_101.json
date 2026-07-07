@@ -1,0 +1,691 @@
+{
+  "metadata": {
+    "kernelspec": {
+      "language": "python",
+      "display_name": "Python 3",
+      "name": "python3"
+    },
+    "language_info": {
+      "pygments_lexer": "ipython3",
+      "nbconvert_exporter": "python",
+      "version": "3.6.4",
+      "file_extension": ".py",
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3
+      },
+      "name": "python",
+      "mimetype": "text/x-python"
+    },
+    "colab": {
+      "provenance": []
+    }
+  },
+  "nbformat_minor": 0,
+  "nbformat": 4,
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Introduction"
+      ],
+      "metadata": {
+        "id": "a91YC477_SZ9"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Let's build up from the basics: what is a Jupyter Notebook? A notebook is a document made of cells. You can write in some of them (markdown cells) or you can perform calculations in Python (code cells) and run them like this:"
+      ],
+      "metadata": {
+        "id": "kcZtVmsS_SaB"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "1+1"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-04-24T20:00:06.294808Z",
+          "iopub.execute_input": "2022-04-24T20:00:06.295342Z",
+          "iopub.status.idle": "2022-04-24T20:00:06.32586Z",
+          "shell.execute_reply.started": "2022-04-24T20:00:06.295213Z",
+          "shell.execute_reply": "2022-04-24T20:00:06.324876Z"
+        },
+        "trusted": true,
+        "id": "eZUqgkLp_SaD",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "eba40535-8b41-4aac-c107-69236215f011"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "2"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 1
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Cool, huh? This combination of prose and code makes Jupyter Notebook ideal for experimentation: we can see the rationale for each experiment, the code, and the results in one comprehensive document.\n",
+        "\n",
+        "Try it yourself now. Click \"Copy & Edit\" in the top right to get your own editable version of this notebook, then click the cell above and hit `Shift`-`Enter`.\n",
+        "\n",
+        "Other renowned institutions in academia and industry use Jupyter Notebook, including Google, Microsoft, IBM, Bloomberg, Berkeley and NASA among others. Even Nobel-winning economists [use Jupyter Notebooks](https://paulromer.net/jupyter-mathematica-and-the-future-of-the-research-paper/)  for their experiments and some suggest that Jupyter Notebooks will be the [new format for research papers](https://www.theatlantic.com/science/archive/2018/04/the-scientific-paper-is-obsolete/556676/).\n"
+      ],
+      "metadata": {
+        "id": "8oCGR287_Sae"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Writing"
+      ],
+      "metadata": {
+        "id": "OhUcDbmv_Sal"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "A type of cell in which you can write text is called a _Markdown cell_. [_Markdown_](https://en.wikipedia.org/wiki/Markdown) is a very popular markup language. To specify that a cell is Markdown you need to click in the drop-down menu in the toolbar and select Markdown.\n",
+        "\n",
+        "Click the '+ Markdown' button below. Now you can type your first Markdown cell. Write 'My first markdown cell' and press run.\n",
+        "\n",
+        "You should see something like this:"
+      ],
+      "metadata": {
+        "id": "npfj4WIj_Sam"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "My first markdown cell"
+      ],
+      "metadata": {
+        "id": "wev-b1kE_Sam"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Now try making your first _Code_ cell: follow the same steps as before but click \"+ Code\". Type something like 3/2. You should see '1.5' as output."
+      ],
+      "metadata": {
+        "id": "z_TKVa4H_Sam"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "3/2"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-04-24T20:01:13.917336Z",
+          "iopub.execute_input": "2022-04-24T20:01:13.917666Z",
+          "iopub.status.idle": "2022-04-24T20:01:13.92343Z",
+          "shell.execute_reply.started": "2022-04-24T20:01:13.917621Z",
+          "shell.execute_reply": "2022-04-24T20:01:13.922665Z"
+        },
+        "trusted": true,
+        "id": "5NTZLC9Y_San",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "f4f8ad7f-c8d3-42cf-8385-e96bb4f4088c"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "1.5"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 2
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Modes"
+      ],
+      "metadata": {
+        "id": "IK2EUd4I_Saq"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "If you made a mistake in your *Markdown* cell and you have already run it, you will notice that you cannot edit it just by clicking on it. This is because you are in **Command Mode**. Jupyter Notebooks have two distinct modes:\n",
+        "\n",
+        "- Edit Mode:: Allows you to edit a cell's content.\n",
+        "\n",
+        "- Command Mode:: Allows you to edit the notebook as a whole and use keyboard shortcuts but not edit a cell's content.\n",
+        "\n",
+        "You can toggle between these two by either pressing <kbd>ESC</kbd> and <kbd>Enter</kbd> or clicking outside a cell or inside it (you need to double click if it's a Markdown cell). You can always tell which mode you're on: the current cell will have a green border in **Edit Mode** and a blue border in **Command Mode**. Try it!\n"
+      ],
+      "metadata": {
+        "id": "gxy89jr8_Saq"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Other Important Considerations"
+      ],
+      "metadata": {
+        "id": "5rHKdblT_Sar"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Your notebook is autosaved every 120 seconds. If you want to manually save it you can just press the \"save version\" button on the upper right corner.\n",
+        "\n",
+        "To know if your *kernel* (the Python engine executing your instructions behind the scenes) is computing or not, you can check the icon to the left of your cell. If the dot spinning, it means that the kernel is working. If not, it is idle.\n",
+        "\n",
+        "There are a couple of shortcuts you must know about which we use **all** the time (always in **Command Mode**). These are:\n",
+        "\n",
+        "- <kbd>Shift</kbd>+<kbd>Enter</kbd>: Run the code or markdown on a cell\n",
+        "- <kbd>Up Arrow</kbd> / <kbd>Down Arrow</kbd>: Toggle across cells\n",
+        "- <kbd>b</kbd>: Create new cell underneath this one\n",
+        "- <kbd>0</kbd>+<kbd>0</kbd>: Reset Kernel\n",
+        "\n",
+        "You can find more shortcuts by typing <kbd>h</kbd> (for help).\n",
+        "\n",
+        "You may need to use shell commands, like `ls` or `cat` in a Jupyter Notebook environment. That is very easy to do: just type `!` before you shell command, like so:"
+      ],
+      "metadata": {
+        "id": "R4vjP9ur_Sar"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "!pwd"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-04-24T20:05:01.750722Z",
+          "iopub.execute_input": "2022-04-24T20:05:01.751028Z",
+          "iopub.status.idle": "2022-04-24T20:05:02.49447Z",
+          "shell.execute_reply.started": "2022-04-24T20:05:01.750992Z",
+          "shell.execute_reply": "2022-04-24T20:05:02.493731Z"
+        },
+        "trusted": true,
+        "id": "IPf88QAr_Sas",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "af7f18ac-180f-45a6-90d7-6f1ef1eb7e04"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "/content\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "That's it. This is all you need to know to use Jupyter Notebooks. That said, we have more tips and tricks below... There's a lot you can do with notebooks -- in fact, we published [a whole book](https://www.amazon.com/Deep-Learning-Coders-fastai-PyTorch/dp/1492045527) written entirely as notebooks!"
+      ],
+      "metadata": {
+        "id": "1Nnhz0HV_Sas"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Markdown Formatting\n"
+      ],
+      "metadata": {
+        "id": "RPXgLOof_Sat"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Images"
+      ],
+      "metadata": {
+        "id": "xp9M4AeW_Sau"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Did you know that the Jupyter Notebook team won the highest honor for a software system, the ACM Software System Award?"
+      ],
+      "metadata": {
+        "id": "FKYfcrEH_Sau"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "\n"
+      ],
+      "metadata": {
+        "id": "CeQtmA5W_Sav"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "And did you know that you can add images to your notebook, like I did in the cell above? To do so, just copy your image on your computer, and paste it into a markdown cell. You'll see something like this:\n",
+        "\n",
+        "    ![image.png](attachment:e8fe737f-c301-41ec-a462-cf16cee3cbb7.png)\n",
+        "\n",
+        "When you execute the cell, you'll see the image appear."
+      ],
+      "metadata": {
+        "id": "68Rp6vFk_Sav"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Italics, Bold, Strikethrough, Inline, Blockquotes and Links"
+      ],
+      "metadata": {
+        "id": "KdnosBPt_Sav"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "The five most important concepts to format your code appropriately when using Markdown are:\n",
+        "    \n",
+        "- *Italics*:: Surround your text with \\_ or \\*.\n",
+        "\n",
+        "- **Bold**:: Surround your text with \\__ or \\**.\n",
+        "\n",
+        "- `inline`:: Surround your text with \\`.\n",
+        "\n",
+        "- blockquote:: Place \\> before your text.\n",
+        "\n",
+        "- [Links](http://course-v3.fast.ai/):: Surround the text you want to link with \\[\\] and place the link adjacent to the text, surrounded with ().\n",
+        "\n"
+      ],
+      "metadata": {
+        "id": "5HeCvPhr_Sav"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Headings"
+      ],
+      "metadata": {
+        "id": "oIoTm8pQ_Sav"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Notice that including a hashtag before the text in a markdown cell makes the text a heading. The number of hashtags you include will determine the priority of the header (# is level one, ## is level two, ### is level three and #### is level four). We will add three new cells with the + button on the left to see how every level of heading looks.\n",
+        "\n",
+        "In the notebook, double click on some headings and find out what level they are!\n"
+      ],
+      "metadata": {
+        "id": "6gC4JKRA_Sav"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Lists"
+      ],
+      "metadata": {
+        "id": "9n5f1zPG_Sav"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "There are three types of lists in markdown.\n",
+        "\n",
+        "Ordered list:\n",
+        "\n",
+        "1. Step 1\n",
+        "    2. Step 1B\n",
+        "3. Step 3\n",
+        "\n",
+        "Unordered list\n",
+        "\n",
+        "* learning rate\n",
+        "* cycle length\n",
+        "* weight decay\n",
+        "\n",
+        "Task list\n",
+        "\n",
+        "- [x] Learn Jupyter Notebooks\n",
+        "    - [x] Writing\n",
+        "    - [x] Modes\n",
+        "    - [x] Other Considerations\n",
+        "- [ ] Change the world\n",
+        "\n",
+        "In the notebook, double click on them to see how they are built!\n"
+      ],
+      "metadata": {
+        "id": "lwk_sG1p_Saw"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Code Capabilities"
+      ],
+      "metadata": {
+        "id": "D6nSpn7Z_Saw"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "**Code** cells are different than **Markdown** cells in that they have an output cell. This means that we can _keep_ the results of our code within the notebook and share them. Let's say we want to show a graph that explains the result of an experiment. We can just run the necessary cells and save the notebook. The output will be there when we open it again! Try it out by running the next two cells."
+      ],
+      "metadata": {
+        "id": "9AnLgjga_Saw"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "a = 1\n",
+        "b = a + 1\n",
+        "c = b + a + 1\n",
+        "d = c + b + a + 1\n",
+        "a, b, c ,d"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-04-24T20:17:26.204129Z",
+          "iopub.execute_input": "2022-04-24T20:17:26.204587Z",
+          "iopub.status.idle": "2022-04-24T20:17:26.210903Z",
+          "shell.execute_reply.started": "2022-04-24T20:17:26.204552Z",
+          "shell.execute_reply": "2022-04-24T20:17:26.210032Z"
+        },
+        "trusted": true,
+        "id": "KbJZ_ArX_Saw",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "d51913a1-4a57-4707-d82e-6090791836aa"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "execute_result",
+          "data": {
+            "text/plain": [
+              "(1, 2, 4, 8)"
+            ]
+          },
+          "metadata": {},
+          "execution_count": 4
+        }
+      ]
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "import matplotlib.pyplot as plt\n",
+        "\n",
+        "plt.plot([a,b,c,d])\n",
+        "plt.show()"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-04-24T20:17:27.213474Z",
+          "iopub.execute_input": "2022-04-24T20:17:27.213767Z",
+          "iopub.status.idle": "2022-04-24T20:17:27.428066Z",
+          "shell.execute_reply.started": "2022-04-24T20:17:27.213738Z",
+          "shell.execute_reply": "2022-04-24T20:17:27.426435Z"
+        },
+        "trusted": true,
+        "id": "-6P1w0D9_Saw",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 430
+        },
+        "outputId": "a367dec9-673e-498d-d175-2d3dcaa7f72d"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "display_data",
+          "data": {
+            "text/plain": [
+              "<Figure size 640x480 with 1 Axes>"
+            ],
+            "image/png": "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\n"
+          },
+          "metadata": {}
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Running Jupyter Locally"
+      ],
+      "metadata": {
+        "id": "e-SNbeHH_Sax"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "This notebook is running inside Kaggle. You can also run notebooks inside other cloud environments such as [Colab](https://colab.research.google.com), [Sagemaker Studio Lab](https://studiolab.sagemaker.aws/), and [Paperspace Gradient](https://gradient.run/notebooks). Or you can run a Jupyter Notebook server from your local computer. What's more, if you have installed Anaconda you don't even need to install Jupyter (if not, just `pip install jupyter`).\n",
+        "\n",
+        "You just need to run `jupyter notebook` in your terminal. Remember to run it from a folder that contains all the folders/files you will want to access. You will be able to open, view, and edit files located within the directory in which you run this command but not files in parent directories.\n",
+        "\n",
+        "If a browser tab does not open automatically once you run the command, you should CTRL+CLICK the link starting with 'http://localhost:' and this will open a new tab in your default browser.\n"
+      ],
+      "metadata": {
+        "id": "xBzS3Jzs_Say"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Shortcuts and Tricks"
+      ],
+      "metadata": {
+        "id": "x-w0CEGa_Say"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Here is a list of useful tricks when in a Jupyter Notebook. Make sure you learn them early and use them as often as you can!\n"
+      ],
+      "metadata": {
+        "id": "NYKBRMuV_Say"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Command Mode Shortcuts"
+      ],
+      "metadata": {
+        "id": "EGIk31MH_Say"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "There are a couple of useful keyboard shortcuts in `Command Mode` that you can leverage to make Jupyter Notebook faster to use. Remember that you can switch back and forth between `Command Mode` and `Edit Mode` with <kbd>Esc</kbd> and <kbd>Enter</kbd>.\n",
+        "\n",
+        "- m:: Convert cell to Markdown\n",
+        "- y:: Convert cell to Code\n",
+        "- d+d:: Delete cell\n",
+        "- o:: Toggle between hide or show output\n",
+        "- Shift+Arrow up/Arrow down:: Select multiple cells. Once you have selected them you can operate on them like a batch (run, copy, paste etc).\n",
+        "- Shift+M:: Merge selected cells\n"
+      ],
+      "metadata": {
+        "id": "CKZcAJim_Saz"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Cell Tricks"
+      ],
+      "metadata": {
+        "id": "xoliBwo5_Sa4"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "There are also some tricks that you can code into a cell:\n",
+        "\n",
+        "- `?function-name`:: Shows the definition and docstring for that function\n",
+        "- `??function-name`:: Shows the source code for that function\n",
+        "- `doc(function-name)`:: Shows the definition, docstring **and links to the documentation** of the function\n",
+        "(only works with fastai library imported)\n",
+        "- Shift+Tab (press once):: See which parameters to pass to a function\n",
+        "- Shift+Tab (press three times):: Get additional information on the method\n",
+        "\n",
+        "Here's an example of using `?` to learn about Python's `print()` function:"
+      ],
+      "metadata": {
+        "id": "y5B8h8l__Sa6"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "?print"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-04-24T20:19:08.469088Z",
+          "iopub.execute_input": "2022-04-24T20:19:08.469889Z",
+          "iopub.status.idle": "2022-04-24T20:19:08.474222Z",
+          "shell.execute_reply.started": "2022-04-24T20:19:08.469852Z",
+          "shell.execute_reply": "2022-04-24T20:19:08.473469Z"
+        },
+        "trusted": true,
+        "id": "c7mYqSvD_Sa8"
+      },
+      "execution_count": null,
+      "outputs": []
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "### Line Magics"
+      ],
+      "metadata": {
+        "id": "g6Wj5RKU_SbG"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "Line magics are functions that you can run on cells. They should be at the beginning of a line and take as an argument the rest of the line from where they are called. You call them by placing a '%' sign before the command. The most useful ones are:\n",
+        "\n",
+        "- `%matplotlib inline`:: Ensures that all matplotlib plots will be plotted in the output cell within the notebook and will be kept in the notebook when saved.\n",
+        "\n",
+        "This command is always called together at the beginning of every notebook of the fast.ai course.\n",
+        "\n",
+        "``` python\n",
+        "%matplotlib inline\n",
+        "```\n",
+        "\n",
+        "- `%timeit`:: Runs a line ten thousand times and displays the average time it took to run."
+      ],
+      "metadata": {
+        "id": "txOhdhZ3_SbH"
+      }
+    },
+    {
+      "cell_type": "code",
+      "source": [
+        "%timeit [i+1 for i in range(1000)]"
+      ],
+      "metadata": {
+        "execution": {
+          "iopub.status.busy": "2022-04-24T20:10:13.839549Z",
+          "iopub.execute_input": "2022-04-24T20:10:13.839892Z",
+          "iopub.status.idle": "2022-04-24T20:10:18.121665Z",
+          "shell.execute_reply.started": "2022-04-24T20:10:13.839856Z",
+          "shell.execute_reply": "2022-04-24T20:10:18.120991Z"
+        },
+        "trusted": true,
+        "id": "spL791aX_SbH",
+        "colab": {
+          "base_uri": "https://localhost:8080/"
+        },
+        "outputId": "703926b7-a434-487c-a1dd-d3d91816134a"
+      },
+      "execution_count": null,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "name": "stdout",
+          "text": [
+            "66.2 µs ± 23.4 µs per loop (mean ± std. dev. of 7 runs, 10000 loops each)\n"
+          ]
+        }
+      ]
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "`%debug`: Inspects a function which is showing an error using the [Python debugger](https://docs.python.org/3/library/pdb.html). If you type this in a cell just after an error, you will be directed to a console where you can inspect the values of all the variables.\n"
+      ],
+      "metadata": {
+        "id": "2ye-AZFT_SbK"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "## Thanks for reading!"
+      ],
+      "metadata": {
+        "id": "Cil0N3ip_SbO"
+      }
+    },
+    {
+      "cell_type": "markdown",
+      "source": [
+        "If you found this notebook useful, I'd greatly appreciate an upvote (on my original notebook [here](https://www.kaggle.com/code/jhoward/jupyter-notebook-101), not on the copy you made of it!) Don't hesitate to add a comment if you have any questions or thoughts to add, or have your own favorite Jupyter tips."
+      ],
+      "metadata": {
+        "id": "iqIXRCPJ_SbO"
+      }
+    }
+  ]
+}
