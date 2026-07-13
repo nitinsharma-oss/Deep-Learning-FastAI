@@ -12,7 +12,7 @@ Run:  python capg.py
 """
 import numpy as np, torch, torch.nn as nn, random, copy, math
 from collections import deque
-from wiretap_env import WiretapEnv, evaluate
+from wiretap_env import WiretapEnv, evaluate, plot_learning_curve
 
 H, BATCH, GAMMA, TAU, LR = 64, 128, 0.99, 0.005, 3e-4
 LOG2 = math.log(2.0)
@@ -97,7 +97,7 @@ class CAPG:
 
 def train(steps=10000, eval_every=1000):
     env = WiretapEnv(); agent = CAPG(env)
-    s = env.reset(); ep = 0
+    s = env.reset(); ep = 0; log = []
     for t in range(1, steps+1):
         P = agent.act(s)
         s2, r, _, _ = env.step(P)
@@ -106,12 +106,14 @@ def train(steps=10000, eval_every=1000):
         agent.update()
         if t % eval_every == 0:
             avg = evaluate(lambda st: agent.act(st, explore=False), env)
+            log.append((t, avg))
             beta = torch.sigmoid(agent.log_beta).item()
             print(f'[CAPG] step {t:6d}  eval avg reward/step = {avg:.4f}  (beta={beta:.2f})')
-    return agent
+    return agent, log
 
 if __name__ == '__main__':
     torch.manual_seed(0); np.random.seed(0); random.seed(0)
-    agent = train()
+    agent, log = train()
     env = agent.env; wf = evaluate(lambda st: env.waterfill_P(*env.denorm(np.asarray(st))), env, n_ep=10)
+    plot_learning_curve(log, 'CAPG', wf=wf, color='#4a3aa7')
     print(f'[CAPG] water-filling baseline = {wf:.4f}')
