@@ -88,3 +88,33 @@ def evaluate(policy_fn, env, n_ep=5, ep_len=200):
             s, r, _, _ = env.step(policy_fn(s)); acc += r
         tot += acc/ep_len
     return tot/n_ep
+
+# ---- shared plotting utility ---------------------------------------------
+def plot_learning_curve(log, name, wf=None, color='#2a78d6', save_path=None):
+    """
+    log  : list of (step, eval_reward) tuples collected during training
+    name : agent name for the title/legend
+    wf   : optional water-filling baseline value (horizontal dashed line)
+    Saves '<name lowercase>_curve.png' next to the script unless save_path given.
+    """
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+    xs, ys = zip(*log)
+    fig, ax = plt.subplots(figsize=(9, 5.5))
+    ax.plot(xs, ys, color=color, lw=2.5, marker='o', ms=5, alpha=0.9, label=name)
+    if wf is not None:
+        ax.axhline(wf, color='gray', ls='--', lw=1.5, alpha=0.8,
+                   label=f'Water-filling ({wf:.4f})')
+    ax.set_xlabel('Training steps', fontsize=13)
+    ax.set_ylabel('Avg secrecy reward / step', fontsize=13)
+    ax.set_title(f'{name} — Wiretap Power Control  (rate = log2(1+Av), v = b^2·P·gamma·Po)',
+                 fontsize=12.5, fontweight='bold')
+    ax.legend(fontsize=11)
+    ax.grid(True, alpha=0.3)
+    plt.tight_layout()
+    path = save_path or f'{name.lower().replace(" ", "_")}_curve.png'
+    plt.savefig(path, dpi=150)
+    plt.close(fig)
+    print(f'[{name}] learning curve saved -> {path}')
+    return path
