@@ -7,7 +7,7 @@ Run:  python ecdpo.py
 """
 import numpy as np, torch, torch.nn as nn, random, copy
 from collections import deque
-from wiretap_env import WiretapEnv, evaluate
+from wiretap_env import WiretapEnv, evaluate, plot_learning_curve
 
 H, BATCH, GAMMA, TAU, LR = 64, 128, 0.99, 0.005, 3e-4
 ENT_COEF = 0.05        # entropy bonus weight (from SAC's idea, fixed here)
@@ -82,7 +82,7 @@ class ECDPO:
 
 def train(steps=10000, eval_every=1000):
     env = WiretapEnv(); agent = ECDPO(env)
-    s = env.reset(); ep = 0
+    s = env.reset(); ep = 0; log = []
     for t in range(1, steps+1):
         P = agent.act(s)
         s2, r, _, _ = env.step(P)
@@ -91,11 +91,13 @@ def train(steps=10000, eval_every=1000):
         agent.update()
         if t % eval_every == 0:
             avg = evaluate(lambda st: agent.act(st, explore=False), env)
+            log.append((t, avg))
             print(f'[ECDPO] step {t:6d}  eval avg reward/step = {avg:.4f}')
-    return agent
+    return agent, log
 
 if __name__ == '__main__':
     torch.manual_seed(0); np.random.seed(0); random.seed(0)
-    agent = train()
+    agent, log = train()
     env = agent.env; wf = evaluate(lambda st: env.waterfill_P(*env.denorm(np.asarray(st))), env, n_ep=10)
+    plot_learning_curve(log, 'ECDPO', wf=wf, color='#e34948')
     print(f'[ECDPO] water-filling baseline = {wf:.4f}')
