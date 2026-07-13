@@ -4,7 +4,7 @@ v_B = b^2*Pt*gamma_B*Po, v_E = b^2*Pt*gamma_E*Po, rate = log2(1+A*v)
 Run:  python ppo.py
 """
 import numpy as np, torch, torch.nn as nn, torch.nn.functional as F, random, math
-from wiretap_env import WiretapEnv, evaluate
+from wiretap_env import WiretapEnv, evaluate, plot_learning_curve
 
 H, LR, GAMMA, LAM_GAE = 64, 3e-4, 0.99, 0.95
 CLIP, EPOCHS, MB, HORIZON = 0.2, 8, 64, 256
@@ -91,17 +91,19 @@ class PPO:
 
 def train(steps=10000, eval_every=1024):
     env = WiretapEnv(); agent = PPO(env)
-    done = 0
+    done = 0; log = []
     while done < steps:
         agent.rollout_and_update()
         done += HORIZON
         if done % eval_every < HORIZON:
             avg = evaluate(lambda st: agent.act(st, explore=False), env)
+            log.append((done, avg))
             print(f'[PPO ] step {done:6d}  eval avg reward/step = {avg:.4f}')
-    return agent
+    return agent, log
 
 if __name__ == '__main__':
     torch.manual_seed(0); np.random.seed(0); random.seed(0)
-    agent = train()
+    agent, log = train()
     env = agent.env; wf = evaluate(lambda st: env.waterfill_P(*env.denorm(np.asarray(st))), env, n_ep=10)
+    plot_learning_curve(log, 'PPO', wf=wf, color='#eda100')
     print(f'[PPO ] water-filling baseline = {wf:.4f}')
