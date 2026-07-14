@@ -1,10 +1,10 @@
 """
 CAPG (Novel) — Concavity-Aware Policy Gradient for wiretap power control
 Physics-informed: the reward gradient w.r.t. power is available in CLOSED FORM
-from the log2(1+A*v) structure with v = b^2*Pt*gamma*Po:
+from the log2(1+A*v) structure with v_B = (gamma_B*Po/b1^2)*Pt, v_E = (gamma_E*Po/b2^2)*Pt:
 
-  dr/dP = (1/ln2) * [ A_B*c*gB/(1+A_B*c*P*gB) - A_E*c*gE/(1+A_E*c*P*gE) ] - lam
-  (c = b^2*Po)
+  dr/dP = (1/ln2) * [ A_B*cB*gB/(1+A_B*cB*P*gB) - A_E*cE*gE/(1+A_E*cE*P*gE) ] - lam
+  (cB = Po/b1^2,  cE = Po/b2^2)
 
 The actor loss BLENDS the critic gradient (long-horizon, learned) with this
 exact analytical gradient (single-step, exact) via a learnable coefficient beta.
@@ -65,8 +65,8 @@ class CAPG:
         e = self.env
         gB = S[:, 0]*(e.g_max - e.g_min) + e.g_min      # de-normalise gamma_B
         gE = S[:, 1]*(e.g_max - e.g_min) + e.g_min      # de-normalise gamma_E
-        tB = e.A_B * e.c * gB                            # A_B * b^2 * Po * gamma_B
-        tE = e.A_E * e.c * gE
+        tB = e.A_B * e.cB * gB                           # A_B * (Po/b1^2) * gamma_B
+        tE = e.A_E * e.cE * gE                           # A_E * (Po/b2^2) * gamma_E
         return (tB/(1.0 + tB*P) - tE/(1.0 + tE*P))/LOG2 - e.lam
 
     def update(self):
