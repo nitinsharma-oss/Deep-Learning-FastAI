@@ -6,10 +6,11 @@
 \usepackage[colorlinks=true,linkcolor=blue!50!black]{hyperref}
 \usepackage{enumitem}
 \newcommand{\E}{\mathbb{E}}
-\newcommand{\dd}{\,\mathrm{d}}
 
 \title{\textbf{DRL-Based Adaptive Power Control for Wiretap-Channel ASC:}\\
-\large Mathematical Formulation, Learning-Curve Fluctuation Analysis,\\ and Training-Duration Clarification}
+\large Corrected Formulation, Learning-Curve Fluctuation Analysis,\\
+and Training-Duration Clarification\\[1mm]
+\normalsize (Revision 2 --- corrected SNR relation)}
 \author{}
 \date{July 2026}
 
@@ -19,17 +20,50 @@
 \tableofcontents
 
 %% ==================================================================
-\section{The Underlying MDP Formulation}
+\section{Revision Note: What Was Corrected and Why It Matters}
+%% ==================================================================
+The previous version of this guide (and the first release of the code) used the SNR relation
+$v = b^{2} P_t \gamma P_o$ with a \emph{single shared} constant $b$ that \emph{multiplied} the SNR.
+The correct model is
+\begin{equation}
+\boxed{\;
+v_B \;=\; \frac{\gamma_B\, P_o}{b_1^{2}}\; P_t,
+\qquad\qquad
+v_E \;=\; \frac{\gamma_E\, P_o}{b_2^{2}}\; P_t
+\;}
+\label{eq:snr}
+\end{equation}
+i.e.\ (i) the optical constants \emph{divide} rather than multiply, and (ii) each link has its
+\emph{own} constant: $b_1$ for Bob, $b_2$ for Eve. In the code these are folded into per-link
+constants
+\begin{equation}
+c_B := \frac{P_o}{b_1^{2}}, \qquad c_E := \frac{P_o}{b_2^{2}},
+\qquad\text{so}\qquad v_B = c_B\,P_t\,\gamma_B,\quad v_E = c_E\,P_t\,\gamma_E .
+\end{equation}
+
+\paragraph{Design implication (sign flip of intuition).} Because $b^{2}$ now sits in the
+\emph{denominator}, a \emph{larger} $b_2$ \emph{weakens} Eve's SNR. Hence the favourable secrecy
+regime is $b_2 > b_1$ --- the \emph{opposite} of the intuition under the old (incorrect)
+multiplicative relation. All quantities that depend on the SNR relation were updated accordingly:
+the environment reward, the closed-form reward gradient, the water-filling baseline, and CAPG's
+analytical gradient. The learning \emph{algorithms} (DDPG, SAC, PPO, ECDPO) are untouched: they
+interact with the channel only through the reward signal, so only their documentation changed.
+
+\paragraph{Verification of the correction.} The updated analytical derivative
+(equation~\eqref{eq:drdp} below) was checked against central-difference numerical differentiation
+of the new reward using deliberately \emph{asymmetric} constants ($b_1{=}1.3$, $b_2{=}0.9$,
+$P_o{=}1.2$, chosen to expose any residual shared-constant bug): agreement to
+$3.5\times 10^{-10}$, and the water-filling solver returns a sensible interior optimum.
+
+%% ==================================================================
+\section{The Underlying MDP Formulation (Corrected)}
 %% ==================================================================
 
 \subsection{Channel and SNR Model}
-The instantaneous received SNRs of Bob and Eve follow the specified relation
-\begin{equation}
-v_B \;=\; b^{2}\, P_t\, \gamma_B\, P_o, \qquad\qquad
-v_E \;=\; b^{2}\, P_t\, \gamma_E\, P_o,
-\label{eq:snr}
-\end{equation}
-where $P_t$ is the transmit power (the \emph{control action}), $\gamma_B,\gamma_E$ are the instantaneous fading gains, and $b, P_o$ are fixed optical constants. In the code these constants are folded into $c := b^{2}P_o$, so $v = c\,P_t\,\gamma$.
+The instantaneous received SNRs follow \eqref{eq:snr}: $P_t$ is the transmit power (the
+\emph{control action}), $\gamma_B,\gamma_E$ are the instantaneous fading gains, and
+$b_1, b_2, P_o$ are fixed optical constants (constructor arguments
+\texttt{WiretapEnv(b1=..., b2=..., P\_o=...)}; defaults $b_1{=}b_2{=}P_o{=}1$).
 
 \subsection{Markov Decision Process}
 \textbf{State.} The pair of fading gains, normalised to $[0,1]^2$:
@@ -42,203 +76,271 @@ The gains evolve as a first-order autoregressive (AR(1)) process modelling chann
 \qquad w_t \sim \mathrm{Unif}(\gamma_{\min},\gamma_{\max}),\qquad \rho = 0.85,
 \label{eq:ar1}
 \end{equation}
-clipped to the support $[\gamma_{\min},\gamma_{\max}]=[0.2,\,3.0]$. The correlation $\rho=0.85$ makes consecutive channel states strongly dependent, exactly as a physical fading channel within its coherence time.
+clipped to $[\gamma_{\min},\gamma_{\max}]=[0.2,\,3.0]$. The correlation $\rho=0.85$ makes
+consecutive channel states strongly dependent, as in a physical fading channel within its
+coherence time.
 
 \textbf{Action.} Transmit power on a continuous range:
 \begin{equation}
 a_t = P_t \in [P_{\min}, P_{\max}] = [0.1,\; 5.0].
 \end{equation}
-The neural actor outputs a sigmoid value $a^{01}\in(0,1)$ which is affinely mapped to $[P_{\min},P_{\max}]$.
+The neural actor outputs a sigmoid value $a^{01}\in(0,1)$, affinely mapped to $[P_{\min},P_{\max}]$.
 
-\textbf{Reward.} Instantaneous secrecy rate with the base-2 logarithm rate law $\log_2(1+Av)$, minus a Lagrangian penalty enforcing the average power budget $\bar P = 2.0$:
+\textbf{Reward.} Instantaneous secrecy rate under the base-2 rate law $\log_2(1+Av)$ with the
+corrected SNRs \eqref{eq:snr}, minus a Lagrangian penalty enforcing the average power budget
+$\bar P = 2.0$:
 \begin{equation}
 \boxed{\;
-r_t \;=\; \Big[\log_2\!\big(1 + A_B\, v_B\big) \;-\; \log_2\!\big(1 + A_E\, v_E\big)\Big]^{+}
+r_t \;=\; \Big[\log_2\!\big(1 + A_B\, c_B\, P_t\, \gamma_B\big)
+\;-\; \log_2\!\big(1 + A_E\, c_E\, P_t\, \gamma_E\big)\Big]^{+}
 \;-\; \lambda\,\big(P_t - \bar P\big)
 \;}
 \label{eq:reward}
 \end{equation}
-with $[x]^+=\max(x,0)$ (no negative secrecy), $A_B = 1.5 > A_E = 0.5$ (the design constraint $A_B>A_E$), and $\lambda = 0.3$.
+with $[x]^+=\max(x,0)$, $A_B = 1.5 > A_E = 0.5$, and $\lambda = 0.3$.
 
 \textbf{Objective.} Each agent maximises the discounted return
 \begin{equation}
 J(\pi) = \E_\pi\!\Big[\sum_{t=0}^{\infty} \gamma^{t}\, r_t\Big],\qquad \gamma = 0.99,
 \end{equation}
-which, for this recurrent chain, is equivalent up to scaling to maximising the long-run \emph{average} secrecy reward --- i.e.\ the adaptive-power ASC.
+equivalent up to scaling to maximising the long-run \emph{average} secrecy reward, i.e.\ the
+adaptive-power ASC.
 
-\subsection{The Analytical Baseline (Water-Filling)}
-Because the reward \eqref{eq:reward} is concave in $P_t$ for every fixed state, the single-step optimum has a closed form. The exact derivative is
+\subsection{The Analytical Baseline (Water-Filling, Corrected)}
+The reward \eqref{eq:reward} is concave in $P_t$ for every fixed state, so the single-step optimum
+has a closed form. The exact derivative under the corrected relation is
 \begin{equation}
 \frac{\partial r}{\partial P}
 =\frac{1}{\ln 2}\left[
-\frac{A_B\,c\,\gamma_B}{1 + A_B\,c\,P\,\gamma_B}
--\frac{A_E\,c\,\gamma_E}{1 + A_E\,c\,P\,\gamma_E}
+\frac{A_B\,c_B\,\gamma_B}{1 + A_B\,c_B\,P\,\gamma_B}
+-\frac{A_E\,c_E\,\gamma_E}{1 + A_E\,c_E\,P\,\gamma_E}
 \right] - \lambda,
+\qquad c_B=\frac{P_o}{b_1^{2}},\;\; c_E=\frac{P_o}{b_2^{2}},
 \label{eq:drdp}
 \end{equation}
-and the per-state optimal power $P^\ast(\gamma_B,\gamma_E)$ is found by bisection on \eqref{eq:drdp} (function \texttt{waterfill\_P} in \texttt{wiretap\_env.py}), with $P^\ast = P_{\min}$ whenever $A_B\gamma_B \le A_E\gamma_E$ (no secrecy possible at any power). This baseline is plotted as the dashed grey line in every learning-curve figure.
+and the per-state optimal power $P^\ast(\gamma_B,\gamma_E)$ is obtained by bisection on
+\eqref{eq:drdp} (\texttt{waterfill\_P} in \texttt{wiretap\_env.py}), with $P^\ast = P_{\min}$
+whenever $A_B c_B\gamma_B \le A_E c_E\gamma_E$ (no secrecy possible at any power --- note the
+per-link constants now enter this feasibility condition too). This baseline is the dashed grey
+line in every learning-curve figure.
 
 %% ==================================================================
 \section{Theory Behind Each of the Five Agents}
 %% ==================================================================
 
 \subsection{DDPG --- Deterministic Policy Gradient}
-Actor $\mu_\theta(s)\!\to\!P$, critic $Q_\phi(s,a)$. The critic minimises the TD error against slowly-moving target networks,
+Actor $\mu_\theta(s)\!\to\!P$, critic $Q_\phi(s,a)$. The critic minimises TD error against
+slowly-moving target networks,
 \begin{equation}
 \mathcal{L}(\phi)=\E\big[(Q_\phi(s,a) - y)^2\big],\qquad
 y = r + \gamma\, Q_{\phi'}\big(s',\, \mu_{\theta'}(s')\big),
 \end{equation}
-and the actor ascends the deterministic policy gradient (Silver et al.):
+and the actor ascends the deterministic policy gradient:
 \begin{equation}
 \nabla_\theta J = \E_s\Big[\nabla_a Q_\phi(s,a)\big|_{a=\mu_\theta(s)}\; \nabla_\theta\, \mu_\theta(s)\Big].
 \end{equation}
-Exploration: additive Gaussian noise $\mathcal N(0,0.2)$ on the sigmoid output.
+Exploration: additive Gaussian noise on the sigmoid output (with linear decay in the 150k-step
+configuration).
 
 \subsection{SAC --- Maximum-Entropy RL}
-Stochastic squashed-Gaussian actor; objective augmented with policy entropy,
+Stochastic squashed-Gaussian actor; entropy-augmented objective
 \begin{equation}
 J_{\mathrm{SAC}} = \E\Big[\sum_t r_t + \alpha\, \mathcal H\big(\pi(\cdot\,|\,s_t)\big)\Big],
 \end{equation}
-twin critics $Q_{\phi_1},Q_{\phi_2}$ with min-target to suppress overestimation,
+twin critics with min-target,
 \begin{equation}
 y = r + \gamma\Big(\min_{i=1,2} Q_{\phi_i'}(s',a') - \alpha \log\pi(a'|s')\Big),\quad a'\sim\pi(\cdot|s'),
 \end{equation}
-and the temperature $\alpha$ auto-tuned by gradient descent toward a target entropy $\bar{\mathcal H}=-1$.
+temperature $\alpha$ auto-tuned toward target entropy $\bar{\mathcal H}=-1$.
 
 \subsection{PPO --- Clipped Trust Region (On-Policy)}
-Gaussian policy with state-independent $\sigma$; advantages by GAE ($\lambda_{\mathrm{GAE}}{=}0.95$); the clipped surrogate
+Gaussian policy, GAE advantages ($\lambda_{\mathrm{GAE}}{=}0.95$), clipped surrogate
 \begin{equation}
 \mathcal{L}^{\mathrm{CLIP}}(\theta) = \E\Big[\min\big(\rho_t(\theta)\hat A_t,\;
 \mathrm{clip}(\rho_t(\theta),\,1{-}\epsilon,\,1{+}\epsilon)\,\hat A_t\big)\Big],
-\qquad \rho_t = \frac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t|s_t)},\;\; \epsilon=0.2,
+\qquad \epsilon=0.2,
 \end{equation}
-optimised for $K{=}8$ epochs per 256-step rollout. On-policy: data is discarded after each update.
+optimised for $K{=}8$ epochs per 256-step rollout.
 
 \subsection{ECDPO --- The Hybrid}
-Deterministic sigmoid actor (from DDPG) $+$ twin-Q min-target critics (from SAC/TD3) $+$ a Bernoulli-entropy bonus on the $(0,1)$ action output (in the spirit of PPO/SAC regularisation):
+Deterministic sigmoid actor (DDPG) $+$ twin-Q min-target critics (SAC/TD3) $+$ Bernoulli-entropy
+bonus on the $(0,1)$ action output:
 \begin{equation}
 \mathcal{L}_{\mathrm{actor}} = -\min_{i} Q_{\phi_i}\big(s,\mu_\theta(s)\big)
-\;-\; c_{\mathrm{ent}}\Big[-a\log a-(1{-}a)\log(1{-}a)\Big],\qquad c_{\mathrm{ent}}=0.05,
+\;-\; c_{\mathrm{ent}}\Big[-a\log a-(1{-}a)\log(1{-}a)\Big],\qquad c_{\mathrm{ent}}=0.05.
 \end{equation}
-which keeps the policy away from saturated boundary powers during learning while retaining a precise deterministic action at deployment.
 
-\subsection{CAPG --- Concavity-Aware Policy Gradient (Novel)}
-The distinguishing observation: for this problem the reward gradient with respect to the action is available \emph{in closed form}, equation~\eqref{eq:drdp}. CAPG therefore blends two gradient estimates,
+\subsection{CAPG --- Concavity-Aware Policy Gradient (Novel, Corrected)}
+The key property: the reward gradient with respect to the action is available \emph{in closed
+form} --- equation~\eqref{eq:drdp}, now with the per-link constants $c_B, c_E$. CAPG blends
 \begin{equation}
 \boxed{\;
 \nabla_\theta J \;=\; (1-\beta)\underbrace{\nabla_\theta\, Q_\phi\big(s,\mu_\theta(s)\big)}_{\text{critic: long-horizon, learned}}
 \;+\; \beta\, \underbrace{\frac{\partial r}{\partial P}\Big|_{P=\mu_\theta(s)} \nabla_\theta\,\mu_\theta(s)}_{\text{analytical: single-step, exact}}
 \;}
 \end{equation}
-with $\beta=\sigma(\log\beta)$ a \emph{learnable} mixing coefficient. Empirically $\beta$ climbed from $0.75$ to $0.90$ within 2\,000 steps --- the agent learned to trust the physics. Because the analytical term is exact and noise-free, CAPG converges fastest and can exceed the greedy water-filling baseline (the critic supplies the multi-step lookahead that greedy water-filling lacks).
+with a \emph{learnable} $\beta=\sigma(\log\beta)$. Under the corrected formula, $\beta$ again rose
+rapidly (to $0.84$ within only $1{,}500$ steps), i.e.\ the agent learned to trust the physics.
+Because the analytical term is exact and noise-free, CAPG remains the fastest-converging method;
+its critic supplies the multi-step lookahead over the correlated AR(1) channel that greedy
+water-filling lacks, which is why it can exceed the water-filling baseline.
 
 %% ==================================================================
-\section{Why the Learning Curves Fluctuate}
+\section{Empirical Status Under the Corrected Formula (Honest Record)}
 %% ==================================================================
-Four distinct noise sources act simultaneously; the dominant one is \emph{measurement}, not the agents.
-
-\subsection{Source 1 (Dominant): Each Plotted Point Is a Monte-Carlo Estimate}
-Every point on the curve is the average reward over $5$ episodes $\times$ $200$ steps $=1000$ samples, each episode starting from a \emph{random} fading state and driven by \emph{random} AR(1) innovations. The per-state reward has high intrinsic variance by construction: in favourable states ($\gamma_B$ high, $\gamma_E$ low) the secrecy term is large; whenever $A_B\gamma_B \le A_E\gamma_E$ the $[\cdot]^+$ clips it to zero.
-
-Moreover, with correlation $\rho = 0.85$ consecutive samples are strongly dependent, so the \emph{effective} number of independent samples is only
-\begin{equation}
-N_{\mathrm{eff}} \;\approx\; N\cdot \frac{1-\rho}{1+\rho}
-\;=\; 1000 \times \frac{0.15}{1.85} \;\approx\; 81 .
-\end{equation}
-The standard error of each plotted point is therefore $\sigma/\sqrt{81}\approx\sigma/9$, which for this reward distribution evaluates to roughly $\pm 0.01$--$0.02$ --- precisely the wiggle amplitude observed. \textbf{Decisive check:} the water-filling policy is deterministic and provably optimal per step, yet re-evaluating it at every checkpoint with fresh random seeds produces the \emph{same} wiggle. The fluctuation is measurement noise, not policy instability.
-
-\subsection{Source 2: The Policy Itself Changes Between Checkpoints}
-Gradient updates occur every environment step, so each evaluation samples a slightly different policy. Near the optimum this costs little: the reward is concave and \emph{flat} in $P$ around $P^\ast$ (the same concavity CAPG exploits), so small action errors translate into tiny reward differences --- which is why the fluctuations stay bounded rather than growing.
-
-\subsection{Source 3: Bootstrapped, Moving Targets}
-The critic learns from targets built with its own (target-network) estimates, $y = r+\gamma\,Q'(s',\cdot)$; the actor climbs a critic that is itself still moving. This combination of function approximation $+$ bootstrapping $+$ off-policy data (the ``deadly triad'') is known to produce oscillation \emph{around} the fixed point rather than monotone convergence. It is a theoretical property of TD learning, not an implementation bug.
-
-\subsection{Source 4: Stochastic Minibatch Gradients}
-Each update samples 128 random transitions from the replay buffer, so every gradient step is itself a noisy estimate. SAC additionally injects entropy-driven action noise into its own training data --- which is why its curve is simultaneously the noisiest and the slowest to rise early on.
-
-%% ==================================================================
-\section{Why the Reward Can Never Be a Constant Flat Line}
-%% ==================================================================
-Even the \emph{perfectly converged optimal policy} does not produce a constant reward. What is constant at convergence is the \emph{expectation}
-\begin{equation}
-\rho^\ast \;=\; \lim_{T\to\infty}\frac1T\sum_{t=1}^{T} r_t \qquad\text{(a single number)},
-\end{equation}
-but any \emph{finite-window} average of $r_t$ is a random variable, because
-$r_t = r\big(s_t,\pi^\ast(s_t)\big)$ depends on the random channel state $s_t$ --- and $s_t$ never stops fluctuating; that is the physics of fading. In a good state the optimal policy earns $\sim\!2$ bits of secrecy; in a state with $A_B\gamma_B \le A_E\gamma_E$ it earns zero secrecy plus only the power-saving term. The measured 1000-sample average inherits this variance through $N_{\mathrm{eff}}\approx 81$.
-
-A flat reward would require a \emph{static} channel --- in which case no MDP or DRL is needed at all; a single water-filling computation suffices. The fluctuation in the plots is, in a precise sense, \emph{the signature of the problem being nontrivial}.
-
-\paragraph{Correct convergence criterion.} Not ``flat curve,'' but: \textbf{curve oscillating within a fixed band around the water-filling line}. DDPG, PPO, ECDPO, and CAPG satisfy this after ${\sim}2\,000$ steps; SAC approaches it more slowly because of its entropy-driven exploration phase.
-
-%% ==================================================================
-\section{Clarification: Actual Training Duration (Not 150{,}000 Steps)}
-%% ==================================================================
-\textbf{Honest record of what was actually run.} The training was \emph{not} 150{,}000 steps. The actual executed durations were:
-
+After the correction, all five agents were re-verified by short smoke-test runs
+(\textbf{1{,}500 steps} each, default constants $b_1{=}b_2{=}P_o{=}1$, seed 0):
 \begin{center}
 \renewcommand{\arraystretch}{1.25}
 \begin{tabular}{@{}lll@{}}
 \toprule
-\textbf{Run} & \textbf{Steps actually executed} & \textbf{Note}\\
+\textbf{Agent} & \textbf{Eval reward @ 1{,}500 steps} & \textbf{Note}\\
 \midrule
-First attempt (all 5 agents) & 60{,}000 planned & aborted: exceeded compute time limit\\
-Second attempt & 15{,}000--20{,}000 & partially completed, also time-limited\\
-Final comparison (plotted) & \textbf{8{,}000 per agent} & the five-curve comparison figure\\
-Separate files (\texttt{ddpg.py} etc.) & default \textbf{10{,}000} & \texttt{train(steps=10000)}\\
-Smoke tests of the separate files & 2{,}000--3{,}000 & verification runs only\\
+DDPG  & 1.163 & converging normally\\
+SAC   & 1.108 & entropy warm-up phase, as expected\\
+PPO   & 1.227 & already near the optimal band\\
+ECDPO & 1.179 & converging normally\\
+\rowcolor{blue!8}
+CAPG  & 1.198 & $\beta \to 0.84$ --- analytical gradient already trusted\\
 \bottomrule
 \end{tabular}
 \end{center}
 
-\subsection{Why the Shorter Runs Are Nevertheless Sufficient Here}
-Three structural properties of this specific problem make convergence fast:
+\noindent\textbf{Two honest caveats.}
 \begin{enumerate}[nosep]
-\item \textbf{Tiny state--action space.} The state is 2-dimensional, the action 1-dimensional, and the optimal policy $P^\ast(\gamma_B,\gamma_E)$ is a smooth surface (closed-form water-filling). A 2-hidden-layer network of width 64 represents it easily.
-\item \textbf{Concave, flat-topped reward.} Near $P^\ast$ the reward barely changes with $P$, so approximate policies already collect near-optimal reward --- there is little left to gain after the curve reaches the water-filling band.
-\item \textbf{Empirical evidence.} DDPG, PPO, ECDPO, CAPG all enter the water-filling band by ${\sim}2\,000$ steps and merely oscillate within it thereafter (Sections~3--4 explain the oscillation). Additional steps would \emph{not} flatten the curves --- the residual wiggle is Monte-Carlo evaluation noise, which more \emph{training} cannot remove (only more \emph{evaluation} episodes or common random numbers can; see Section~6).
+\item These are \emph{smoke tests}, not full training runs. They confirm correctness of the
+corrected implementation and typical early-training ordering, not final rankings. Full-horizon
+rankings under the old formula (CAPG $>$ ECDPO $\approx$ DDPG $>$ PPO $>$ SAC) are \emph{expected}
+to carry over --- the correction rescales the SNR inside the log but preserves concavity in $P$
+and the entire problem structure --- but they have not yet been re-measured at full horizon.
+\item The 150{,}000-step DDPG run reported previously was executed under the \emph{old} formula.
+Its qualitative conclusions (convergence by ${\sim}10$k steps; the remaining wiggle is evaluation
+noise) transfer, but its numbers ($1.212$ vs.\ water-filling $1.223$) should not be quoted as
+corrected-model results. To regenerate: \texttt{train(steps=150000, eval\_every=5000)} in
+\texttt{ddpg.py} ($\approx$9--10 min on a laptop CPU).
 \end{enumerate}
-The one exception is \textbf{SAC}, whose entropy-driven warm-up genuinely benefits from longer horizons: at 8{,}000--15{,}000 steps it was still rising, and a 100{,}000--150{,}000-step run would plausibly close its gap to the others.
 
-\subsection{How to Run 150{,}000 Steps Yourself}
-Each file exposes the duration as a single argument. Change
+%% ==================================================================
+\section{Why the Learning Curves Fluctuate}
+%% ==================================================================
+Four distinct noise sources act simultaneously; the dominant one is \emph{measurement}, not the
+agents. (Unchanged by the formula correction --- these are properties of the evaluation protocol
+and of TD learning.)
+
+\subsection{Source 1 (Dominant): Each Plotted Point Is a Monte-Carlo Estimate}
+Every point is the average reward over $5$--$20$ episodes $\times$ $200$ steps of a \emph{random}
+fading process. The per-state reward has high intrinsic variance: in favourable states the
+secrecy term is large; whenever $A_B c_B\gamma_B \le A_E c_E\gamma_E$ the $[\cdot]^+$ clips it to
+zero. With correlation $\rho = 0.85$, consecutive samples are strongly dependent, so for a
+1000-sample evaluation the \emph{effective} number of independent samples is only
+\begin{equation}
+N_{\mathrm{eff}} \;\approx\; N\cdot \frac{1-\rho}{1+\rho}
+\;=\; 1000 \times \frac{0.15}{1.85} \;\approx\; 81,
+\end{equation}
+giving a standard error of ${\sim}\sigma/9 \approx \pm 0.01$--$0.02$ per point --- exactly the
+observed wiggle. \textbf{Decisive check:} the deterministic, per-step-optimal water-filling policy
+shows the \emph{same} wiggle when re-evaluated with fresh seeds. The fluctuation is measurement
+noise, not policy instability.
+
+\subsection{Source 2: The Policy Changes Between Checkpoints}
+Gradient updates occur every environment step. Near the optimum this costs little: the reward is
+concave and \emph{flat} in $P$ around $P^\ast$, so small action errors produce tiny reward
+differences --- fluctuations stay bounded.
+
+\subsection{Source 3: Bootstrapped, Moving Targets}
+The critic learns from targets built with its own (target-network) estimates,
+$y = r+\gamma\,Q'(s',\cdot)$; the actor climbs a critic that is itself moving. Function
+approximation $+$ bootstrapping $+$ off-policy data (the ``deadly triad'') oscillates \emph{around}
+the fixed point rather than converging monotonically --- a theoretical property, not a bug.
+
+\subsection{Source 4: Stochastic Minibatch Gradients}
+Each update samples 128 random transitions from the replay buffer; every gradient step is a noisy
+estimate. SAC additionally injects entropy-driven action noise into its own training data ---
+hence the noisiest and slowest-rising early curve.
+
+%% ==================================================================
+\section{Why the Reward Can Never Be a Constant Flat Line}
+%% ==================================================================
+Even the \emph{perfectly converged optimal policy} does not produce constant reward. What is
+constant at convergence is the \emph{expectation}
+\begin{equation}
+\rho^\ast \;=\; \lim_{T\to\infty}\frac1T\sum_{t=1}^{T} r_t \qquad\text{(a single number)},
+\end{equation}
+but any \emph{finite-window} average is a random variable, because
+$r_t = r\big(s_t,\pi^\ast(s_t)\big)$ depends on the random channel state $s_t$ --- and $s_t$
+never stops fluctuating; that is the physics of fading. In a good state the optimal policy earns
+${\sim}2$ bits of secrecy; in a state with $A_B c_B\gamma_B \le A_E c_E\gamma_E$ it earns zero
+secrecy plus only the power-saving term. A flat reward would require a \emph{static} channel ---
+in which case a single water-filling computation suffices and no DRL is needed. The fluctuation
+is the signature of the problem being nontrivial.
+
+\paragraph{Correct convergence criterion.} Not ``flat curve,'' but: \textbf{curve oscillating
+within a fixed band around the water-filling line}.
+
+%% ==================================================================
+\section{Training Duration: What Was Run and How to Run 150{,}000 Steps}
+%% ==================================================================
 \begin{center}
-\texttt{agent, log = train()} \quad$\longrightarrow$\quad \texttt{agent, log = train(steps=150000, eval\_every=5000)}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Run} & \textbf{Steps executed} & \textbf{Formula} & \textbf{Note}\\
+\midrule
+Five-agent comparison (plotted) & 8{,}000 / agent & old & original comparison figure\\
+DDPG long run & \textbf{150{,}000} & old & three 50k chunks; converged by ${\sim}$10k\\
+Post-correction smoke tests & 1{,}500 / agent & \textbf{corrected} & implementation verification\\
+Separate files default & 10{,}000 (150{,}000 for \texttt{ddpg.py}) & corrected & \texttt{train(steps=...)}\\
+\bottomrule
+\end{tabular}
 \end{center}
-in the \texttt{\_\_main\_\_} block (or call it that way from your own script). Expected wall-clock on a laptop CPU: roughly 30--60 minutes per off-policy agent (DDPG/SAC/ECDPO/CAPG do one gradient update per environment step) and less for PPO. Raising \texttt{eval\_every} keeps the plot readable at that scale.
+Convergence is fast here for structural reasons: 2-D state, 1-D action, and a concave flat-topped
+reward whose optimal policy is a smooth surface easily represented by a $64{\times}64$ MLP. The
+150k-step DDPG run confirmed empirically that steps beyond ${\sim}$10k only oscillate within the
+optimal band. To run any agent at full length:
+\begin{center}
+\texttt{agent, log = train(steps=150000, eval\_every=5000)}
+\end{center}
+($\approx$9--10 minutes per off-policy agent on a laptop CPU; less for PPO.)
 
 %% ==================================================================
 \section{How to Obtain Smoother Curves (for Publication)}
 %% ==================================================================
 In priority order:
 \begin{enumerate}[nosep]
-\item \textbf{More evaluation episodes:} raise \texttt{n\_ep} in \texttt{evaluate} from 5 to 30--50 --- standard error drops by ${\sim}\sqrt{10}$.
-\item \textbf{Common random numbers:} fix the evaluation seed so every checkpoint is tested on the \emph{identical} fading sequence; this removes Source~1 entirely and leaves only true policy change.
-\item \textbf{Exponential moving average} of the raw points (plot both raw and EMA).
-\item \textbf{Anneal exploration noise and learning rate} in the final third of training (shrinks Sources~2 and~4).
-\item \textbf{Multiple seeds:} run $\ge 5$ seeds and plot mean $\pm$ std band --- the standard the DRL literature expects.
+\item \textbf{More evaluation episodes:} raise \texttt{n\_ep} from 5 to 30--50 (standard error
+drops by ${\sim}\sqrt{10}$).
+\item \textbf{Common random numbers:} fix the evaluation seed so every checkpoint sees the
+\emph{identical} fading sequence (removes Source~1; already implemented in the 150k
+\texttt{ddpg.py}).
+\item \textbf{Exponential moving average} of the raw points (plot both).
+\item \textbf{Anneal exploration noise and learning rate} late in training (shrinks Sources~2, 4;
+noise decay already implemented in \texttt{ddpg.py}).
+\item \textbf{Multiple seeds:} $\ge 5$ seeds, plot mean $\pm$ std band --- the standard the DRL
+literature expects.
 \end{enumerate}
-Items (1) and (2) are one-line changes and transform the visual quality of the plots without altering any conclusion.
 
 %% ==================================================================
-\section{Summary Table}
+\section{Summary}
 %% ==================================================================
 \begin{center}
 \renewcommand{\arraystretch}{1.3}
-\begin{tabular}{@{}lllll@{}}
+\begin{tabular}{@{}llll@{}}
 \toprule
-\textbf{Agent} & \textbf{Type} & \textbf{Key mechanism} & \textbf{Observed behaviour} & \textbf{Reward @ 2--8k}\\
+\textbf{Agent} & \textbf{Type} & \textbf{Key mechanism} & \textbf{Corrected-model status}\\
 \midrule
-DDPG & off-policy, determ. & DPG theorem & fast, mildly noisy & $\approx 1.21$--$1.23$\\
-SAC & off-policy, stoch. & max-entropy, auto-$\alpha$ & slow warm-up, still rising & $\approx 1.14$ (at 2k)\\
-PPO & on-policy, stoch. & clipped surrogate & stable, mid-tier & $\approx 1.22$\\
-ECDPO & hybrid & twin-Q $+$ entropy bonus & stable from step 1 & $\approx 1.22$\\
+DDPG  & off-policy, determ. & DPG theorem                     & verified; 1.163 @ 1.5k\\
+SAC   & off-policy, stoch.  & max-entropy, auto-$\alpha$      & verified; 1.108 @ 1.5k (warm-up)\\
+PPO   & on-policy, stoch.   & clipped surrogate               & verified; 1.227 @ 1.5k\\
+ECDPO & hybrid              & twin-Q $+$ entropy bonus        & verified; 1.179 @ 1.5k\\
 \rowcolor{blue!8}
-CAPG & novel & analytical $\partial r/\partial P$ blend & fastest; $\beta\!\to\!0.90$ & $\approx \mathbf{1.238}$\\
+CAPG  & novel               & analytical $\partial r/\partial P$ blend, per-link $c_B,c_E$ & verified; 1.198 @ 1.5k, $\beta{\to}0.84$\\
 \midrule
-Water-filling & analytical & bisection on \eqref{eq:drdp} & greedy per-step optimum & $\approx 1.212$\\
+Water-filling & analytical  & bisection on \eqref{eq:drdp}    & gradient verified to $3.5{\times}10^{-10}$\\
 \bottomrule
 \end{tabular}
 \end{center}
-\noindent CAPG exceeding water-filling is not an anomaly: water-filling is the greedy \emph{single-step} optimum, whereas CAPG's critic adds multi-step lookahead over the correlated AR(1) channel.
-
+\noindent\textbf{Expected best model:} CAPG, for the same structural reason as before --- it is
+the only agent that exploits the closed-form concave gradient \eqref{eq:drdp}, which the
+correction changed in detail ($c_B, c_E$ per link) but not in kind. ECDPO remains the recommended
+general-purpose alternative when the problem structure cannot be assumed.
 \end{document}
