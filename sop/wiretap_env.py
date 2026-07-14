@@ -1,8 +1,8 @@
 """
 Shared Wiretap Channel Environment
 ==================================
-SNR relation :  v_B = b^2 * P_t * gamma_B * P_o
-                v_E = b^2 * P_t * gamma_E * P_o
+SNR relation :  v_B = (gamma_B * P_o / b1^2) * P_t
+                v_E = (gamma_E * P_o / b2^2) * P_t
 Rate         :  C = log2(1 + A * v)
 Reward       :  r = [log2(1+A_B*v_B) - log2(1+A_E*v_E)]^+  -  lam*(P_t - P_bar)
 State        :  (gamma_B, gamma_E) normalized to [0,1]^2, AR(1) Markov evolution
@@ -14,14 +14,15 @@ LOG2 = np.log(2.0)
 
 class WiretapEnv:
     def __init__(self, A_B=1.5, A_E=0.5,          # constant coefficients, A_B > A_E
-                 b=1.0, P_o=1.0,                   # optical constants: v = b^2 * P * gamma * P_o
+                 b1=1.0, b2=1.0, P_o=1.0,          # optical constants: v = (gamma*P_o/b^2)*P, per link
                  P_min=0.1, P_max=5.0, P_bar=2.0,  # power range and average budget
                  lam=0.3,                          # Lagrange penalty on power
                  rho_B=0.85, rho_E=0.85,           # AR(1) fading correlation
                  g_min=0.2, g_max=3.0):            # fading gain support
         assert A_B > A_E > 0, "design constraint A_B > A_E violated"
         self.A_B, self.A_E = A_B, A_E
-        self.c = b**2 * P_o                        # combined constant: v = c * P * gamma
+        self.cB = P_o / b1**2                      # Bob:  v_B = cB * P * gamma_B
+        self.cE = P_o / b2**2                      # Eve:  v_E = cE * P * gamma_E
         self.P_min, self.P_max, self.P_bar, self.lam = P_min, P_max, P_bar, lam
         self.rho_B, self.rho_E = rho_B, rho_E
         self.g_min, self.g_max = g_min, g_max
@@ -45,8 +46,8 @@ class WiretapEnv:
 
     def step(self, action):
         P = float(np.clip(action, self.P_min, self.P_max))
-        vB = self.c * P * self.gB                  # v_B = b^2 * P_t * gamma_B * P_o
-        vE = self.c * P * self.gE                  # v_E = b^2 * P_t * gamma_E * P_o
+        vB = self.cB * P * self.gB                 # v_B = (gamma_B * P_o / b1^2) * P_t
+        vE = self.cE * P * self.gE                 # v_E = (gamma_E * P_o / b2^2) * P_t
         cB = np.log2(1.0 + self.A_B * vB)
         cE = np.log2(1.0 + self.A_E * vE)
         secrecy = max(cB - cE, 0.0)
@@ -60,9 +61,9 @@ class WiretapEnv:
 
     # ---- closed-form reward gradient (used by CAPG & water-filling) -----
     def dr_dP(self, P, gB, gE):
-        """d/dP [log2(1+A_B c P gB) - log2(1+A_E c P gE)] - lam   (exact)."""
-        tB = self.A_B * self.c * gB
-        tE = self.A_E * self.c * gE
+        """d/dP [log2(1+A_B cB P gB) - log2(1+A_E cE P gE)] - lam   (exact)."""
+        tB = self.A_B * self.cB * gB
+        tE = self.A_E * self.cE * gE
         return (tB/(1.0 + tB*P) - tE/(1.0 + tE*P)) / LOG2 - self.lam
 
     def waterfill_P(self, gB, gE, iters=40):
