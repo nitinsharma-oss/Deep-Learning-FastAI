@@ -1,6 +1,6 @@
 """
 SAC — Soft Actor-Critic for wiretap power control
-v_B = (gamma_B*Po/b1^2)*Pt, v_E = (gamma_E*Po/b2^2)*Pt, rate = log2(1+A*v)
+v_B = (gamma_B*Po)/(b1^2*Pt), v_E = (gamma_E*Po)/(b2^2*Pt), rate = log2(1+A*v)
 Run:  python sac.py
 """
 import numpy as np, torch, torch.nn as nn, torch.nn.functional as F, random, copy, math
