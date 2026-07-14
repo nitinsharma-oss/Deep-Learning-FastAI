@@ -1,6 +1,6 @@
 """
 DDPG — Deep Deterministic Policy Gradient for wiretap power control
-v_B = (gamma_B*Po/b1^2)*Pt, v_E = (gamma_E*Po/b2^2)*Pt, rate = log2(1+A*v)
+v_B = (gamma_B*Po)/(b1^2*Pt), v_E = (gamma_E*Po)/(b2^2*Pt), rate = log2(1+A*v)
 Trained for 150,000 steps with noise decay and 20-episode evaluation.
 Run:  python ddpg.py
 """
