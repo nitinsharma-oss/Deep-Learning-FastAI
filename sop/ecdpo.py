@@ -2,7 +2,7 @@
 ECDPO (Hybrid) — Entropy-regularised Clipped Deterministic Policy Optimization
 Combines: DDPG's deterministic actor + SAC's twin-Q critics + PPO-inspired
           entropy regularisation for exploration stability.
-v_B = b^2*Pt*gamma_B*Po, v_E = b^2*Pt*gamma_E*Po, rate = log2(1+A*v)
+v_B = (gamma_B*Po/b1^2)*Pt, v_E = (gamma_E*Po/b2^2)*Pt, rate = log2(1+A*v)
 Run:  python ecdpo.py
 """
 import numpy as np, torch, torch.nn as nn, random, copy
