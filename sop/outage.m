@@ -135,52 +135,32 @@ while count < total_paths
     count = count + need;
 end
 
-%% ============================ MAIN LOOP ================================
-figure('Color','w','Position',[80 80 1150 520]);
-cols = [0.16 0.47 0.84;  0.85 0.33 0.10;  0.20 0.62 0.30];
-
-% ---- Panel (a): P_out vs gamma_bar_E [dB]  (observable range) ----------
-subplot(1,2,1); hold on; grid on;
-leg = {};
-for in = 1:numel(N_list)
-    N  = N_list(in);
-    kg = kg_of_N(N);
-
-    % exact Meijer-G ( = regularized lower incomplete gamma) outage
-    z_th  = gamma_th ./ gbar_lin;                      % threshold on Z
-    Pout  = gammainc(z_th./theta_g, kg) - gammainc(L_B/theta_g, kg);
-    plot(gbar_dB, max(Pout,1e-12), '-', 'Color', cols(in,:), 'LineWidth', 2);
-    leg{end+1} = sprintf('Exact, N = %d (k_g = %.0f)', N, kg); %#ok<SAGROW>
-
-    % Monte Carlo (points clustered around this curve's own cliff)
-    Zmc = ak * sum(reshape(xi_samples(1:N_mc*M*N), M*N, N_mc), 1);
-    g_pts = gbar_cliff_dB(N) + linspace(-0.35, 0.15, 11);
-    Pmc = arrayfun(@(gdB) mean( (10^(gdB/10)).*Zmc < gamma_th & ...
-                                 Zmc >= L_B ), g_pts);
-    msk = Pmc > 0;
-    plot(g_pts(msk), Pmc(msk), 'o', 'Color', cols(in,:), ...
-         'MarkerFaceColor', cols(in,:), 'MarkerSize', 5, ...
-         'HandleVisibility','off');
-end
-set(gca,'YScale','log'); ylim([1e-6 1.5]); xlim([gbar_dB(1) gbar_dB(end)]);
-xlabel('\gamma\_bar_E  (average SNR)  [dB]');
-ylabel('P_{out}');
-title(sprintf('(a) Outage vs average SNR   (\\gamma_{th} = %.2g, L_B = %g)', ...
-      gamma_th, L_B));
-legend(leg, 'Location', 'southwest');
-
-% ---- Panel (b): deep tail in log10 domain + asymptote slope -k_g -------
-subplot(1,2,2); hold on; grid on;
-gbar_dB_w  = linspace(gbar_cliff_dB(max(N_list)) - 1, ...
-                      gbar_cliff_dB(min(N_list)) + 20, 300);
+%% ================== SINGLE SUPERIMPOSED FIGURE =========================
+%  One figure, one axes (hold on):
+%   - solid   : EXACT Meijer-G outage, log-domain (valid to any depth)
+%   - dashed  : ASYMPTOTE, slope -k_g/10 per dB (diversity order)
+%   - markers : Monte Carlo (observable region, log10 P >= -5)
+%  y-axis is log10(P_out) on a LINEAR scale so that both the observable
+%  waterfall region (top) and the extended deep tail (bottom) fit on the
+%  SAME axes over a wide gamma_bar range.
+%  ========================================================================
+% extended range: 1.5 dB left of the steepest cliff (N max) up to 25 dB
+% beyond the shallowest cliff (N min) so exact & asymptote visibly merge
+gbar_dB_w  = linspace(gbar_cliff_dB(max(N_list)) - 1.5, ...
+                      gbar_cliff_dB(min(N_list)) + 25, 1500);
 gbar_lin_w = 10.^(gbar_dB_w/10);
-leg2 = {};
+
+figure('Color','w','Position',[80 80 950 640]);
+hold on; grid on;
+cols = [0.16 0.47 0.84;  0.85 0.33 0.10;  0.20 0.62 0.30];
+leg_h = []; leg_s = {};
+
 for in = 1:numel(N_list)
     N  = N_list(in);
     kg = kg_of_N(N);
     xw = (gamma_th ./ gbar_lin_w) ./ theta_g;          % z_th/theta_g
 
-    % exact log10 P_out : series for x < kg+1 (log-safe), gammainc otherwise
+    % ---- EXACT log10 P_out (log-safe series for x < kg+1) --------------
     l10P = zeros(size(xw));
     for jj = 1:numel(xw)
         x = xw(jj);
@@ -195,26 +175,63 @@ for in = 1:numel(N_list)
             l10P(jj) = (kg*log(x) - x - gammaln(kg+1) + log(S)) / log(10);
         end
     end
-    % asymptote:  log10 Pasym = [kg*ln(x) - gammaln(kg+1)]/ln(10)
+    if L_B > 0
+        xB = L_B/theta_g;  SB = 1; term = 1; nn = 0;
+        while true
+            nn = nn + 1;  term = term * xB/(kg+nn);  SB = SB + term;
+            if term < eps*SB || nn > 1e6, break; end
+        end
+        lB = (kg*log(xB) - xB - gammaln(kg+1) + log(SB)) / log(10);
+        l10P = l10P + log10(max(1 - 10.^(lB - l10P), realmin));
+    end
+
+    % ---- ASYMPTOTE in log10 domain --------------------------------------
     l10A = (kg*log(xw) - gammaln(kg+1)) / log(10);
+    if L_B > 0
+        lBa  = (kg*log(L_B/theta_g) - gammaln(kg+1)) / log(10);
+        l10A = l10A + log10(max(1 - 10.^(lBa - l10A), realmin));
+    end
 
-    plot(gbar_dB_w, l10P, '-',  'Color', cols(in,:), 'LineWidth', 2);
-    plot(gbar_dB_w, l10A, '--', 'Color', cols(in,:), 'LineWidth', 1.6, ...
-         'HandleVisibility','off');
-    leg2{end+1} = sprintf('N = %d: slope = -k_g/10 = %.0f /dB', ...
-                          N, kg/10); %#ok<SAGROW>
+    h1 = plot(gbar_dB_w, l10P, '-',  'Color', cols(in,:), 'LineWidth', 2.2);
+    plot(gbar_dB_w, min(l10A, 3), '--', 'Color', cols(in,:), 'LineWidth', 1.6);
 
-    % numeric slope check (per decade of gamma_bar)
-    p = polyfit(gbar_dB_w(150:280)/10, l10P(150:280), 1);
+    % ---- MONTE CARLO markers (observable region, near this N's cliff) --
+    Zmc  = ak * sum(reshape(xi_samples(1:N_mc*M*N), M*N, N_mc), 1);
+    g_pts = gbar_cliff_dB(N) + linspace(-0.35, 0.15, 11);
+    Pmc = arrayfun(@(gdB) mean( (10^(gdB/10)).*Zmc < gamma_th & ...
+                                 Zmc >= L_B ), g_pts);
+    msk = Pmc > 0;
+    plot(g_pts(msk), log10(Pmc(msk)), 'o', 'Color', cols(in,:), ...
+         'MarkerFaceColor', cols(in,:), 'MarkerSize', 5.5);
+
+    leg_h(end+1) = h1; %#ok<SAGROW>
+    leg_s{end+1} = sprintf('N = %d  (k_g = %.0f,  slope = -%.0f/dB)', ...
+                           N, kg, kg/10); %#ok<SAGROW>
+
+    % numeric slope check on the exact curve, deep-tail region
+    p = polyfit(gbar_dB_w(700:1400)/10, l10P(700:1400), 1);
     fprintf('N = %3d : fitted tail slope = %.1f per decade (theory -k_g = %.1f)\n', ...
             N, p(1), -kg);
 end
+
 xlabel('\gamma\_bar_E  (average SNR)  [dB]');
 ylabel('log_{10} P_{out}');
-title('(b) Deep tail (log-domain): dashed = asymptote, slope -k_g');
-legend(leg2, 'Location', 'southwest');
+title(sprintf(['Outage vs average SNR  --  exact (solid), asymptote (dashed), ' ...
+               'Monte Carlo (o)   [\\gamma_{th} = %.2g, L_B = %g]'], gamma_th, L_B));
+legend(leg_h, leg_s, 'Location', 'southwest');
+ylim([-4.5e4 2.5e3]);
+xlim([gbar_dB_w(1) gbar_dB_w(end)]);
 
-fprintf(['\nNote: the exact curve (solid) and the Meijer-G small-argument\n' ...
-         'asymptote (dashed) merge at high SNR; the waterfall for N = 16 is\n' ...
-         'only ~0.1 dB wide because k_g = %.0f acts as the diversity order.\n'], ...
-         kg_of_N(N_ref));
+% annotation: observable region
+yl = ylim;
+plot(xlim, [0 0], 'k:', 'LineWidth', 1);
+text(gbar_dB_w(end)-0.5, -yl(2)*0.9, ...
+     {'observable region (P_{out} \geq 10^{-5})', ...
+      'sits along the top edge; MC markers', ...
+      'ride each near-vertical waterfall'}, ...
+     'HorizontalAlignment','right', 'VerticalAlignment','top', ...
+     'FontSize', 9, 'Color', [0.25 0.25 0.25]);
+
+fprintf(['\nSingle-figure view: solid exact curves and dashed asymptotes\n' ...
+         'merge as gamma_bar grows; asymptote slope = -k_g per decade\n' ...
+         '(-k_g/10 per dB) confirms the diversity order for each N.\n']);
