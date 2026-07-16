@@ -1,0 +1,64 @@
+\section{Problem Formulation}
+
+In the considered OIRS-assisted VLC system, the objective is to determine the
+orientation of the optical intelligent reflecting surface (OIRS) that maximizes
+the achievable data rate (ADR). The OIRS orientation is characterized by the
+rotation angles $\gamma$ and $\omega$, which directly determine the effective
+optical channel gain $z(\gamma,\omega)$ and, consequently, the communication
+performance.
+
+Based on the capacity lower bound for intensity-modulation/direct-detection
+(IM/DD) channels, the ADR is expressed as
+\begin{equation}
+\mathrm{ADR}(\gamma,\omega)
+= \frac{B}{2}\log_{2}\!\left[
+1+\frac{e}{2\pi}
+\left(\frac{P\,R_{\mathrm{PD}}\,z(\gamma,\omega)}{Q}\right)^{2}
+\right],
+\label{eq:adr}
+\end{equation}
+where $B$ denotes the modulation bandwidth, $P$ is the transmitted optical
+power, $R_{\mathrm{PD}}$ is the photodetector responsivity, $Q$ is the noise
+standard deviation at the receiver, and $z(\gamma,\omega)$ is the effective
+channel gain determined by the OIRS orientation.
+
+Accordingly, the OIRS orientation design problem is formulated as
+\begin{equation}
+\begin{aligned}
+(\mathrm{P1}):\quad
+(\gamma^{*},\omega^{*})
+= \arg\max_{\gamma,\,\omega}\;
+& \mathrm{ADR}(\gamma,\omega) \\
+\text{s.t.}\quad
+& \gamma_{\min} \le \gamma \le \gamma_{\max}, \\
+& \omega_{\min} \le \omega \le \omega_{\max}.
+\end{aligned}
+\label{eq:p1}
+\end{equation}
+
+Since the optimization variables $\gamma$ and $\omega$ are continuous and the
+mapping from the OIRS orientation to the channel gain is highly nonlinear and
+non-convex, obtaining a closed-form solution to (P1) is intractable. Therefore,
+(P1) is solved using deep reinforcement learning (DRL), in which the optimal
+orientation is learned through direct interaction with the communication
+environment. At each time step, the agent observes the system state (e.g., the
+transmitter, OIRS, and receiver geometry together with the current orientation
+angles) and outputs the continuous action vector
+\begin{equation}
+\mathbf{a}=[\gamma,\ \omega].
+\end{equation}
+The selected orientation determines the effective channel gain
+$z(\gamma,\omega)$, from which the ADR in \eqref{eq:adr} is evaluated and
+returned by the environment as the reward, enabling the agent to iteratively
+learn the orientation that maximizes the communication performance.
+
+To comprehensively evaluate the proposed optimization framework, five DRL
+algorithms are employed: Deep Deterministic Policy Gradient (DDPG), Soft
+Actor--Critic (SAC), Proximal Policy Optimization (PPO), Continuous Action
+Policy Gradient (CAPG), and the proposed Enhanced Continuous Deep Policy
+Optimization (ECDPO) algorithm. All algorithms operate under an identical
+system model, state representation, action space, and reward function, ensuring
+a fair comparison of their convergence behavior, learning stability, and
+achieved ADR. The algorithm attaining the highest ADR with stable convergence
+is identified as the most suitable approach for optimal OIRS orientation
+design.
