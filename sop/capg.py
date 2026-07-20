@@ -1,119 +1,50 @@
+"""capg.py -- Continuous Action Policy Gradient.
+
+Vanilla likelihood-ratio (REINFORCE-style) policy gradient with a Gaussian
+policy over the continuous action a = [gamma, omega], improved with:
+  * an exponential moving-average reward baseline (variance reduction),
+  * a small entropy bonus with linear decay (sustained early exploration),
+  * a learned but floored log-std so the policy cannot collapse prematurely
+    while the stochastic ADR reward is still noisy.
 """
-CAPG (Novel) — Concavity-Aware Policy Gradient for wiretap power control
-Physics-informed: the reward gradient w.r.t. power is available in CLOSED FORM
-from the log2(1+A*v) structure with v_B = (gamma_B*Po)/(b1^2*Pt), v_E = (gamma_E*Po)/(b2^2*Pt):
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-  dr/dP = (1/ln2) * [ -tB/(P^2+tB*P) + tE/(P^2+tE*P) ] - lam,
-  tB = A_B*cB*gB,  tE = A_E*cE*gE,  cB = Po/b1^2,  cE = Po/b2^2
+from common import mlp, set_seeds
 
-The actor loss BLENDS the critic gradient (long-horizon, learned) with this
-exact analytical gradient (single-step, exact) via a learnable coefficient beta.
-Run:  python capg.py
-"""
-import numpy as np, torch, torch.nn as nn, random, copy, math
-from collections import deque
-from wiretap_env import WiretapEnv, evaluate, plot_learning_curve
+HID = 64
+LOG_STD_FLOOR = -3.0
 
-H, BATCH, GAMMA, TAU, LR = 64, 128, 0.99, 0.005, 3e-4
-LOG2 = math.log(2.0)
 
-def mlp(dims, out_act=None):
-    layers = []
-    for i in range(len(dims)-1):
-        layers.append(nn.Linear(dims[i], dims[i+1]))
-        if i < len(dims)-2: layers.append(nn.ReLU())
-    if out_act: layers.append(out_act())
-    return nn.Sequential(*layers)
+def train(env, total_steps=6000, seed=0, lr=3e-4, label="CAPG"):
+    set_seeds(seed)
+    sdim, adim = env.state_dim, env.action_dim
 
-class Buffer:
-    def __init__(self, cap=80000): self.b = deque(maxlen=cap)
-    def push(self, *tr): self.b.append(tr)
-    def sample(self, n):
-        s,a,r,s2 = zip(*random.sample(self.b, n))
-        f = lambda x: torch.tensor(np.array(x), dtype=torch.float32)
-        return f(s), f(a).unsqueeze(1), f(r).unsqueeze(1), f(s2)
-    def __len__(self): return len(self.b)
+    trunk = mlp([sdim, HID, HID])
+    mu_l = nn.Linear(HID, adim)
+    log_std = nn.Parameter(torch.zeros(adim) - 0.1)
+    opt = torch.optim.Adam(list(trunk.parameters()) + list(mu_l.parameters())
+                           + [log_std], lr)
 
-def soft(tgt, src):
-    for t,s in zip(tgt.parameters(), src.parameters()):
-        t.data.copy_(TAU*s.data + (1-TAU)*t.data)
+    s = env.reset()
+    baseline, curve = 0.0, []
+    for t in range(total_steps):
+        st = torch.as_tensor(s).unsqueeze(0)
+        mu = torch.tanh(mu_l(F.relu(trunk(st))))
+        std = torch.clamp(log_std, min=LOG_STD_FLOOR).exp()
+        d = torch.distributions.Normal(mu, std)
+        a = d.sample()
+        _, r, _, info = env.step(np.clip(a.squeeze(0).numpy(), -1, 1))
+        curve.append(info["adr_mean"])
 
-class CAPG:
-    def __init__(self, env):
-        self.env = env
-        self.actor  = mlp([2,H,H,1], nn.Sigmoid);  self.actor_t  = copy.deepcopy(self.actor)
-        self.critic = mlp([3,H,H,1]);              self.critic_t = copy.deepcopy(self.critic)
-        self.oa = torch.optim.Adam(self.actor.parameters(),  LR)
-        self.oc = torch.optim.Adam(self.critic.parameters(), LR)
-        # learnable blend: beta = sigmoid(log_beta) in (0,1)
-        # beta -> 1: trust analytical gradient; beta -> 0: trust critic
-        self.log_beta = torch.tensor(0.0, requires_grad=True)
-        self.ob = torch.optim.Adam([self.log_beta], 1e-3)
-        self.buf = Buffer(); self.noise = 0.15
+        baseline = 0.99 * baseline + 0.01 * r                 # EMA baseline
+        ent_coef = 0.005 * max(0.0, 1.0 - t / (0.6 * total_steps))
+        loss = -(d.log_prob(a).sum()) * (r - baseline) \
+               - ent_coef * d.entropy().sum()
+        opt.zero_grad(); loss.backward(); opt.step()
 
-    def to_P(self, a01):
-        return self.env.P_min + a01*(self.env.P_max - self.env.P_min)
-
-    def act(self, s, explore=True):
-        with torch.no_grad():
-            a = self.actor(torch.tensor(s).unsqueeze(0)).item()
-        if explore: a = float(np.clip(a + np.random.normal(0, self.noise), 0, 1))
-        return self.to_P(a)
-
-    def analytical_dr_dP(self, S, P):
-        """Exact dr/dP for the batch, from the log2(1+Av) closed form."""
-        e = self.env
-        gB = S[:, 0]*(e.g_max - e.g_min) + e.g_min      # de-normalise gamma_B
-        gE = S[:, 1]*(e.g_max - e.g_min) + e.g_min      # de-normalise gamma_E
-        tB = e.A_B * e.cB * gB                           # A_B * (Po/b1^2) * gamma_B
-        tE = e.A_E * e.cE * gE                           # A_E * (Po/b2^2) * gamma_E
-        return (-tB/(P*P + tB*P) + tE/(P*P + tE*P))/LOG2 - e.lam
-
-    def update(self):
-        if len(self.buf) < BATCH: return
-        S, A, R, S2 = self.buf.sample(BATCH)
-        # --- critic update (standard TD)
-        with torch.no_grad():
-            a2 = self.actor_t(S2)
-            q_tgt = R + GAMMA*self.critic_t(torch.cat([S2, self.to_P(a2)], 1))
-        q = self.critic(torch.cat([S, A], 1))
-        self.oc.zero_grad(); (q - q_tgt).pow(2).mean().backward(); self.oc.step()
-        # --- actor update: blend of critic gradient + analytical gradient
-        a_pred = self.actor(S)                           # in (0,1)
-        P_pred = self.to_P(a_pred)
-        # (A) critic-based loss (long-horizon estimate)
-        loss_critic = -self.critic(torch.cat([S, P_pred], 1)).mean()
-        # (B) analytical loss: push each action along the EXACT reward gradient
-        grad_r = self.analytical_dr_dP(S, P_pred.squeeze().detach())
-        loss_analytical = -(grad_r.detach() * a_pred.squeeze()).mean()
-        beta = torch.sigmoid(self.log_beta)
-        loss_actor = (1-beta)*loss_critic + beta*loss_analytical
-        self.oa.zero_grad(); loss_actor.backward(); self.oa.step()
-        # --- adapt beta (REINFORCE-style on the blended loss magnitude)
-        self.ob.zero_grad()
-        (loss_actor.detach()*self.log_beta).backward()
-        self.ob.step()
-        soft(self.actor_t, self.actor); soft(self.critic_t, self.critic)
-
-def train(steps=10000, eval_every=1000):
-    env = WiretapEnv(); agent = CAPG(env)
-    s = env.reset(); ep = 0; log = []
-    for t in range(1, steps+1):
-        P = agent.act(s)
-        s2, r, _, _ = env.step(P)
-        agent.buf.push(s, P, r, s2); s = s2; ep += 1
-        if ep >= 200: s = env.reset(); ep = 0
-        agent.update()
-        if t % eval_every == 0:
-            avg = evaluate(lambda st: agent.act(st, explore=False), env)
-            log.append((t, avg))
-            beta = torch.sigmoid(agent.log_beta).item()
-            print(f'[CAPG] step {t:6d}  eval avg reward/step = {avg:.4f}  (beta={beta:.2f})')
-    return agent, log
-
-if __name__ == '__main__':
-    torch.manual_seed(0); np.random.seed(0); random.seed(0)
-    agent, log = train()
-    env = agent.env; wf = evaluate(lambda st: env.waterfill_P(*env.denorm(np.asarray(st))), env, n_ep=10)
-    plot_learning_curve(log, 'CAPG', wf=wf, color='#4a3aa7')
-    print(f'[CAPG] water-filling baseline = {wf:.4f}')
+    with torch.no_grad():
+        a_fin = torch.tanh(mu_l(F.relu(trunk(torch.as_tensor(s).unsqueeze(0)))))
+    return label, np.asarray(curve), a_fin.squeeze(0).numpy()
