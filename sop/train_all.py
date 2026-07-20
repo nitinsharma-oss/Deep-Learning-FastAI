@@ -74,3 +74,7 @@ if __name__ == "__main__":
     np.savez("curves.npz", **curves)
     with open("results.json", "w") as f:
         json.dump(results, f, indent=2)
+
+    # ------- automatically generate all result graphs (PNG + PDF) -------
+    import make_figures
+    make_figures.main()
