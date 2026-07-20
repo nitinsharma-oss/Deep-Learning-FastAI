@@ -1,0 +1,216 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+\newcommand{\E}{\mathbb{E}}
+
+\title{Deep Reinforcement Learning Models for OIRS Orientation Optimization
+under Random UE Orientation:\\ Implementation and Comparison Guide}
+\author{Companion guide to the cross-layer OIRS--VLC analytical framework}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This guide documents five deep reinforcement learning (DRL) agents---DDPG, SAC,
+PPO, CAPG, and ECDPO---implemented to optimize the common yaw~$\gamma$ and
+roll~$\omega$ of an optical intelligent reflecting surface (OIRS) serving $K$
+users over a blocked-LoS visible light communication (VLC) link. Unlike a
+deterministic point-mirror formulation, the training environment reproduces the
+paper's stochastic channel: the incidence cosine $\xi=\cos\psi$ of every
+LED--element--user path is drawn from the measurement-based truncated-Laplace
+model, so the agents maximize the \emph{expected} achievable data rate (ADR)
+under random user equipment (UE) orientation. Every algorithm is trained under
+an identical state, action space, reward, network width, and interaction
+budget. A common-random-number grid search provides the optimality reference,
+and the learned orientations are additionally evaluated on the cross-layer
+HARQ-IR Age of Information (AoI) metrics of the analytical framework.
+\end{abstract}
+
+\section{Problem--Environment Mapping}
+
+\subsection{Why a deterministic environment is misaligned}
+A deterministic specular-mirror model maps $(\gamma,\omega)$ to a single
+channel gain, admits a closed-form ``bisector'' optimum, and reduces DRL to a
+noiseless two-variable search. The analytical framework instead models the UE
+orientation as random: the equivalent NLoS gain is the aggregate
+\begin{equation}
+Z_k=\sum_{l=1}^{M}\sum_{i=1}^{N}X_{(k,i,l)},\qquad
+X_{(k,i,l)}=a_k\cos\bigl(\psi_k^{\,i}\bigr),
+\label{eq:Zk}
+\end{equation}
+with $\xi=\cos\psi$ following a truncated-Laplace law on
+$[\xi_{\min},\xi_{\max}]$. Consequently (i) the reward observed by the agent is
+a random variable, (ii) the optimization target is the \emph{expectation} over
+UE orientation, and (iii) with $K>1$ users sharing one $(\gamma,\omega)$, no
+closed-form optimum exists. The environment described next restores this
+alignment.
+
+\subsection{Stochastic environment (\texttt{oirs\_vlc\_env.py})}
+\paragraph{Channel statistics.} For each user $k$, the incidence cosine is
+sampled by accept--reject (identical to the MATLAB verification script) from
+\begin{equation}
+f_\xi(\xi)=\frac{1}{\Lambda}
+\exp\!\left(-\frac{|\xi-\mu_{\xi,k}|}{b_\xi}\right),
+\qquad \xi\in[\xi_{\min},\xi_{\max}],
+\end{equation}
+with $b_\xi=0.036$, $\xi_{\min}=0$, $\xi_{\max}=0.9574$ (worked-example
+values); $\mu_{\xi,k}$ follows from the mean UE normal and the IRS$\to$user
+arrival direction. The exact moments $\E[u]$ and $\E[u^2]$ of the shifted
+variable are evaluated with the closed forms of the analytical framework
+(Eqs.~6--8 of the paper), and the per-user Gamma shape
+$k_{g_k}=MN\,\E[\xi]^2/\mathrm{Var}[\xi]$ and scale
+$\theta_{g_k}=a_k\mathrm{Var}[\xi]/\E[\xi]$ (paper Eq.~13) drive the
+cross-layer HARQ-IR outage and AoI evaluation.
+
+\paragraph{Orientation-dependent gain.} The common yaw/roll enter through the
+unified-reflector steering: with mirror normal
+$\mathbf n(\gamma,\omega)=R_y(\omega)R_z(\gamma)(1,0,0)^{\mathsf T}$ and
+specular direction $\mathbf d_{\mathrm{ref}}$, the per-user aggregated gain is
+\begin{equation}
+a_k(\gamma,\omega)=\rho\,\frac{(m+1)A_{\mathrm{pd}}}{2\pi (d_1+d_{2,k})^2}
+\cos^m\!\phi\;
+\bigl(\mathbf d_{\mathrm{ref}}^{\mathsf T}\mathbf u_k\bigr)_+^{\,\kappa},
+\end{equation}
+where $\kappa$ is the reflector beam-concentration exponent ($\kappa=20$ for
+the throughput study, $\kappa=6$ for the wide-beam fairness study).
+
+\paragraph{MDP.} State: fixed normalized geometry of AP, OIRS, and users
+(single-step episodes, no bootstrapping, discount irrelevant). Action:
+$\mathbf a=[\gamma,\omega]\in[-1,1]^2$ affinely mapped to
+$[-\pi/2,\pi/2]^2$ (constraint 26a). Reward (mode \texttt{adr}): one fresh
+draw of all $MN$ cosines per user,
+$r=\frac{1}{K}\sum_k \mathrm{ADR}_k / r_{\mathrm{scale}}$ with
+\begin{equation}
+\mathrm{ADR}_k=\frac{B}{2}\log_2\!\left[1+\frac{e}{2\pi}
+\left(\frac{P\,R_{\mathrm{PD}}\,Z_k}{Q}\right)^{2}\right].
+\end{equation}
+Reward (mode \texttt{aoi}): $r=-\max_k \overline{\Delta}_{k,\mathrm{IR}}$,
+i.e.\ the paper's min--max AoI objective (Eq.~26), computed in closed form via
+the Gamma CDF (the Meijer $G^{1,1}_{1,2}$ terms reduce to regularized
+incomplete gamma functions).
+
+\section{The Five DRL Models}
+
+All agents share: two-hidden-layer MLPs of width 64, Adam optimization,
+identical 6{,}000-interaction budget, identical seed, and 200 uniform
+warm-up actions (where applicable).
+
+\subsection{DDPG (\texttt{ddpg.py})}
+Deterministic actor $\mu_\theta(s)$ with $\tanh$ output; critic
+$Q_\phi(s,a)$. Because episodes are single-step, the critic target is the
+immediate stochastic reward,
+\begin{equation}
+\mathcal L(\phi)=\E\bigl[(Q_\phi(s,a)-r)^2\bigr],\qquad
+\nabla_\theta J=\E\bigl[\nabla_a Q_\phi(s,a)\big|_{a=\mu_\theta(s)}
+\nabla_\theta\mu_\theta(s)\bigr],
+\end{equation}
+so $Q_\phi$ learns the \emph{expected-ADR surface} over the orientation
+randomness and the actor ascends it. Exploration: additive Gaussian noise
+($\sigma=0.3$).
+
+\subsection{SAC (\texttt{sac.py})}
+Stochastic $\tanh$-Gaussian actor with the change-of-variables log-density
+correction, twin soft critics with a minimum operator, and---the decisive
+improvement over a hand-tuned variant---\emph{automatic temperature}:
+\begin{equation}
+\mathcal L(\alpha)=-\alpha\,\E\bigl[\log\pi(a|s)+\bar{\mathcal H}\bigr],
+\qquad \bar{\mathcal H}=-\dim(\mathcal A)=-2,
+\end{equation}
+initialized at $\alpha_0\approx0.1$. This lets the exploration bonus adapt to
+the ADR reward scale; with a fixed, too-large $\alpha$ the entropy term
+dominates the noisy reward and the policy never sharpens.
+
+\subsection{PPO (\texttt{ppo.py})}
+Clipped-surrogate objective with a learned value baseline,
+\begin{equation}
+\mathcal L(\theta)=-\E\Bigl[\min\bigl(\rho_t A_t,\;
+\mathrm{clip}(\rho_t,1\!-\!\epsilon,1\!+\!\epsilon)A_t\bigr)\Bigr],
+\qquad \rho_t=\tfrac{\pi_\theta(a_t|s_t)}{\pi_{\theta_{\mathrm{old}}}(a_t|s_t)},
+\end{equation}
+with $A_t=r_t-V(s_t)$ (single-step). Fixes applied for the noisy-reward
+setting: on-policy batch of 256 draws so the advantage estimate averages the
+orientation randomness, 15 epochs per batch with an approximate-KL early stop
+(0.03), and a linearly decaying entropy bonus. PPO remains the least
+sample-efficient of the five here, which is expected: each policy update
+discards its data, whereas the off-policy agents reuse every draw.
+
+\subsection{CAPG (\texttt{capg.py})}
+Continuous-action likelihood-ratio policy gradient,
+\begin{equation}
+\nabla_\theta J=\E\bigl[\nabla_\theta\log\pi_\theta(a|s)\,(r-\bar b)\bigr],
+\end{equation}
+with an exponential-moving-average baseline $\bar b$ (variance reduction), a
+decaying entropy bonus, and a floored log-std preventing premature policy
+collapse while the reward is still noisy.
+
+\subsection{ECDPO (\texttt{ecdpo.py}) --- \textcolor{red}{placeholder}}
+The proposed algorithm's update equations were not available, so this file
+implements a clearly-marked \emph{enhanced continuous deep policy optimizer}
+on a DDPG backbone with four flag-controlled enhancements suited to the
+stochastic ADR reward: (E1) twin critics with a minimum operator against
+noise-driven overestimation; (E2) delayed actor updates; (E3) exponentially
+decaying exploration noise $0.5\!\to\!0.05$ (global search first, fine
+alignment later); (E4) Huber critic loss, robust to rare tail draws of the
+truncated-Laplace orientation. \textbf{Replace this backbone with the actual
+ECDPO update rule before reporting results under that name}; the flags make
+ablation one-liners.
+
+\section{Results}
+
+\subsection{Expected-ADR optimization ($K=3$, $M=1$, $N=4$, $\kappa=20$)}
+\begin{table}[h!]\centering
+\caption{Learned orientations after 6{,}000 stochastic interactions
+(identical seed and budget). Reference: common-random-number grid search.}
+\begin{tabular}{lccccc}
+\toprule
+Algorithm & $\gamma$ (deg) & $\omega$ (deg) & $\E[\mathrm{ADR}]$ (Mbit/s)
+& \% of ref. & Time (s)\\
+\midrule
+DDPG  & 16.54 & $-7.82$ & 36.94 & 99.50\,\% & 19 \\
+SAC   & 16.87 & $-8.83$ & 37.11 & 99.97\,\% & 31 \\
+PPO   & 6.78  & $-8.72$ & 22.33 & 60.15\,\% & 5  \\
+CAPG  & 8.30  & $-7.48$ & 25.10 & 67.61\,\% & 10 \\
+ECDPO & 16.92 & $-8.37$ & 37.06 & 99.84\,\% & 19 \\
+\midrule
+Grid reference & 16.54 & $-8.77$ & 37.12 & 100\,\% & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The off-policy agents (SAC, ECDPO, DDPG) recover the expected-ADR optimum to
+within $0.5\,\%$; the on-policy agents (PPO, CAPG) settle on a shoulder of the
+multi-user landscape at this budget---a sample-efficiency gap, not a defect of
+the algorithms.
+
+\begin{figure}[h!]\centering
+\includegraphics[width=0.86\textwidth]{convergence_aligned.png}
+\caption{Convergence (150-step moving average of the sampled mean ADR).}
+\end{figure}
+
+\subsection{Cross-layer fairness: the ADR/AoI trade-off}
+At the mean-ADR optimum the narrow beam ($\kappa=20$) serves users 2--3 and
+\emph{abandons user~1} ($\E[\mathrm{ADR}_1]=0$, worst-case
+$\overline{\Delta}_{1,\mathrm{IR}}=4.5$)---precisely the unfairness that
+motivates the paper's min--max AoI objective. Retraining ECDPO with the
+\texttt{aoi} reward on the wide-beam fairness configuration ($\kappa=6$,
+$\bar\gamma=3\times10^{15}$) yields $\gamma=2.49^\circ$,
+$\omega=-10.33^\circ$ with per-user AoI $[1.5,\,1.5,\,1.5]$---the theoretical
+minimum (every user decodes in HARQ round~1), matching the min--max grid
+reference $\overline{\Delta}_{\max}=1.5$ exactly. The DRL framework therefore
+supports both the throughput objective (P1) and the cross-layer AoI objective
+(Eq.~26) by switching one reward flag.
+
+\section{Reproducibility}
+\texttt{oirs\_vlc\_env.py} (environment, moments, Gamma matching, AoI),
+\texttt{common.py}, \texttt{ddpg.py}, \texttt{sac.py}, \texttt{ppo.py},
+\texttt{capg.py}, \texttt{ecdpo.py} (one file per model),
+\texttt{train\_all.py} (runner), \texttt{results.json},
+\texttt{convergence\_aligned.png}. Run \texttt{python3 train\_all.py}.
+
+\end{document}
