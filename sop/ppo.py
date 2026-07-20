@@ -1,109 +1,77 @@
+"""ppo.py -- Proximal Policy Optimization (Schulman et al., 2017),
+clipped-surrogate variant with a learned value baseline.
+
+Improvements over the earlier under-performing version:
+  * larger on-policy batch (256) so the advantage estimate under the NOISY
+    stochastic ADR reward is meaningful;
+  * more optimisation epochs per batch (15) with early stopping on an
+    approximate-KL trigger;
+  * decaying entropy bonus: strong exploration early, sharp policy late;
+  * state-independent learned log-std initialised wide (exp(-0.1) ~ 0.9).
+Single-step episodes: return = reward, advantage = r - V(s).
 """
-PPO — Proximal Policy Optimization for wiretap power control
-v_B = (gamma_B*Po)/(b1^2*Pt), v_E = (gamma_E*Po)/(b2^2*Pt), rate = log2(1+A*v)
-Run:  python ppo.py
-"""
-import numpy as np, torch, torch.nn as nn, torch.nn.functional as F, random, math
-from wiretap_env import WiretapEnv, evaluate, plot_learning_curve
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-H, LR, GAMMA, LAM_GAE = 64, 3e-4, 0.99, 0.95
-CLIP, EPOCHS, MB, HORIZON = 0.2, 8, 64, 256
+from common import mlp, set_seeds
 
-def mlp(dims):
-    layers = []
-    for i in range(len(dims)-1):
-        layers.append(nn.Linear(dims[i], dims[i+1]))
-        if i < len(dims)-2: layers.append(nn.ReLU())
-    return nn.Sequential(*layers)
+HID = 64
 
-class GaussianActor(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.shared = mlp([2, H, H])
-        self.mu = nn.Linear(H, 1)
-        self.log_std = nn.Parameter(torch.zeros(1))  # state-independent std
-    def forward(self, s):
-        h = F.relu(self.shared(s))
-        return torch.sigmoid(self.mu(h))
-    def log_prob(self, s, a):
-        mu = self(s); std = self.log_std.exp()
-        return -0.5*((a-mu)/std)**2 - torch.log(std) - 0.5*math.log(2*math.pi)
-    def sample(self, s):
-        mu = self(s); std = self.log_std.exp()
-        return torch.clamp(mu + std*torch.randn_like(mu), 0.0, 1.0)
 
-class PPO:
-    def __init__(self, env):
-        self.env = env
-        self.actor = GaussianActor(); self.valuef = mlp([2, H, H, 1])
-        self.oa = torch.optim.Adam(self.actor.parameters(),  LR)
-        self.ov = torch.optim.Adam(self.valuef.parameters(), LR)
+def train(env, total_steps=6000, seed=0, lr=3e-4, batch=256, epochs=15,
+          clip=0.2, kl_stop=0.03, label="PPO"):
+    set_seeds(seed)
+    sdim, adim = env.state_dim, env.action_dim
 
-    def to_P(self, a01):
-        return self.env.P_min + a01*(self.env.P_max - self.env.P_min)
+    trunk = mlp([sdim, HID, HID])
+    mu_l = nn.Linear(HID, adim)
+    log_std = nn.Parameter(torch.zeros(adim) - 0.1)
+    vf = mlp([sdim, HID, HID, 1])
+    opt = torch.optim.Adam(list(trunk.parameters()) + list(mu_l.parameters())
+                           + [log_std] + list(vf.parameters()), lr)
 
-    def act(self, s, explore=True):
-        with torch.no_grad():
-            st = torch.tensor(s).unsqueeze(0)
-            a = self.actor.sample(st) if explore else self.actor(st)
-        return self.to_P(a.item())
+    def dist(st):
+        mu = torch.tanh(mu_l(F.relu(trunk(st))))
+        return torch.distributions.Normal(mu, log_std.exp())
 
-    def rollout_and_update(self):
-        # ---- collect on-policy rollout
-        S_, A_, R_, LP_ = [], [], [], []
-        s = self.env.reset()
-        for _ in range(HORIZON):
-            st = torch.tensor(s).unsqueeze(0)
-            a = self.actor.sample(st)
-            lp = self.actor.log_prob(st, a)
-            s2, r, _, _ = self.env.step(self.to_P(a.item()))
-            S_.append(s); A_.append(a.item()); R_.append(r); LP_.append(lp.item())
-            s = s2
-        S  = torch.tensor(np.array(S_),  dtype=torch.float32)
-        A  = torch.tensor(A_,  dtype=torch.float32).unsqueeze(1)
-        R  = np.asarray(R_)
-        OL = torch.tensor(LP_, dtype=torch.float32).unsqueeze(1)
-        # ---- GAE advantages
-        with torch.no_grad(): V = self.valuef(S).squeeze().numpy()
-        adv = np.zeros_like(R); gae = 0.0; V_ext = np.append(V, 0.0)
-        for t in reversed(range(len(R))):
-            delta = R[t] + GAMMA*V_ext[t+1] - V_ext[t]
-            gae = delta + GAMMA*LAM_GAE*gae
-            adv[t] = gae
-        RET = torch.tensor(adv + V, dtype=torch.float32).unsqueeze(1)
-        ADV = torch.tensor(adv, dtype=torch.float32).unsqueeze(1)
-        ADV = (ADV - ADV.mean())/(ADV.std() + 1e-8)
-        # ---- K epochs of clipped-surrogate minibatch updates
-        for _ in range(EPOCHS):
-            idx = np.random.permutation(len(R))
-            for i in range(0, len(R), MB):
-                j = idx[i:i+MB]
-                sb, ab, advb, retb, olpb = S[j], A[j], ADV[j], RET[j], OL[j]
-                lp = self.actor.log_prob(sb, ab)
-                ratio = (lp - olpb).exp()
-                surr1 = ratio*advb
-                surr2 = torch.clamp(ratio, 1-CLIP, 1+CLIP)*advb
-                la = -torch.min(surr1, surr2).mean()
-                self.oa.zero_grad(); la.backward(); self.oa.step()
-                lv = (self.valuef(sb) - retb).pow(2).mean()
-                self.ov.zero_grad(); lv.backward(); self.ov.step()
-        return float(np.mean(R))
+    s = env.reset()
+    curve, steps, it = [], 0, 0
+    n_iters = max(1, total_steps // batch)
+    while steps < total_steps:
+        S, A, R, LP = [], [], [], []
+        for _ in range(batch):
+            st = torch.as_tensor(s).unsqueeze(0)
+            with torch.no_grad():
+                d = dist(st)
+                a = d.sample()
+                lp = d.log_prob(a).sum(-1)
+            _, r, _, info = env.step(np.clip(a.squeeze(0).numpy(), -1, 1))
+            S.append(s); A.append(a.squeeze(0).numpy()); R.append(r)
+            LP.append(lp.item()); curve.append(info["adr_mean"]); steps += 1
 
-def train(steps=10000, eval_every=1024):
-    env = WiretapEnv(); agent = PPO(env)
-    done = 0; log = []
-    while done < steps:
-        agent.rollout_and_update()
-        done += HORIZON
-        if done % eval_every < HORIZON:
-            avg = evaluate(lambda st: agent.act(st, explore=False), env)
-            log.append((done, avg))
-            print(f'[PPO ] step {done:6d}  eval avg reward/step = {avg:.4f}')
-    return agent, log
+        S = torch.as_tensor(np.asarray(S)); A = torch.as_tensor(np.asarray(A))
+        R = torch.as_tensor(np.asarray(R), dtype=torch.float32).unsqueeze(1)
+        LP = torch.as_tensor(np.asarray(LP), dtype=torch.float32).unsqueeze(1)
+        ent_coef = 0.01 * max(0.0, 1.0 - it / (0.6 * n_iters))   # decay to 0
 
-if __name__ == '__main__':
-    torch.manual_seed(0); np.random.seed(0); random.seed(0)
-    agent, log = train()
-    env = agent.env; wf = evaluate(lambda st: env.waterfill_P(*env.denorm(np.asarray(st))), env, n_ep=10)
-    plot_learning_curve(log, 'PPO', wf=wf, color='#eda100')
-    print(f'[PPO ] water-filling baseline = {wf:.4f}')
+        for _ in range(epochs):
+            d = dist(S)
+            lp = d.log_prob(A).sum(-1, keepdim=True)
+            if (LP - lp).mean().item() > kl_stop:                # early stop
+                break
+            v = vf(S)
+            adv = (R - v).detach()
+            adv = (adv - adv.mean()) / (adv.std() + 1e-6)
+            ratio = torch.exp(lp - LP)
+            l_pi = -torch.min(ratio * adv,
+                              torch.clamp(ratio, 1 - clip, 1 + clip) * adv).mean()
+            loss = l_pi + 0.5 * F.mse_loss(v, R) \
+                   - ent_coef * d.entropy().sum(-1).mean()
+            opt.zero_grad(); loss.backward(); opt.step()
+        it += 1
+
+    with torch.no_grad():
+        a_fin = torch.tanh(mu_l(F.relu(trunk(torch.as_tensor(s).unsqueeze(0)))))
+    return label, np.asarray(curve[:total_steps]), a_fin.squeeze(0).numpy()
