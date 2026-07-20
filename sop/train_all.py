@@ -1,25 +1,20 @@
 """train_all.py -- trains DDPG, SAC, PPO, CAPG, ECDPO on the research-aligned
-OIRS-VLC environment (random UE orientation, K users, stochastic ADR reward)
-and evaluates every learned orientation on:
-
-  * expected mean ADR  E[(1/K) sum_k ADR_k]  (common random numbers),
-  * per-user expected ADR,
-  * per-user average HARQ-IR AoI (paper Eqs. 24-25),
-
-against a fine grid-search reference of the expected-ADR optimum.
-Bonus run: ECDPO retrained with the paper's min-max AoI objective (Eq. 26)
-to demonstrate the fairness/mean-throughput trade-off.
+OIRS-VLC environment (random UE orientation, K users, stochastic ADR reward),
+evaluates every learned orientation against a grid-search reference, runs the
+min-max AoI fairness study, and generates ALL result figures directly
+(PNG + PDF). No .npz / .json intermediates are written.
 """
-import json
 import time
 
 import numpy as np
 
 from oirs_vlc_env import OIRSVLCEnv
 import ddpg, sac, ppo, capg, ecdpo
+import make_figures
 
 TOTAL_STEPS = 6000
 SEED = 0
+AGENTS = (ddpg, sac, ppo, capg, ecdpo)   # one module per algorithm file
 
 
 def evaluate(env, a_fin):
@@ -37,10 +32,12 @@ def evaluate(env, a_fin):
 if __name__ == "__main__":
     results, curves = {}, {}
 
-    for mod in (ddpg, sac, ppo, capg, ecdpo):
-        env = OIRSVLCEnv(seed=SEED)               # fresh env, same seed: fair
+    for mod in AGENTS:
+        env = OIRSVLCEnv(seed=SEED)              # fresh env, same seed: fair
         t0 = time.time()
         name, curve, a_fin = mod.train(env, total_steps=TOTAL_STEPS, seed=SEED)
+        if name in results:                      # guard against duplicates
+            name = f"{name}-{sum(k.startswith(name) for k in results) + 1}"
         res = evaluate(env, a_fin)
         res["train_s"] = round(time.time() - t0, 1)
         results[name] = res
@@ -52,29 +49,27 @@ if __name__ == "__main__":
     # grid-search reference of the expected-ADR optimum
     env = OIRSVLCEnv(seed=SEED)
     g, o, v = env.grid_reference()
-    ref = dict(gamma_deg=float(np.rad2deg(g)), omega_deg=float(np.rad2deg(o)),
-               mean_adr_mbps=float(v / 1e6),
-               adr_k_mbps=[float(x) for x in env.expected_adr(g, o) / 1e6],
-               aoi_k=[float(x) for x in env.avg_aoi_ir(g, o)])
-    results["Grid reference"] = ref
-    print(f"{'GRID':6s} g={ref['gamma_deg']:8.3f}  w={ref['omega_deg']:8.3f}  "
-          f"E[ADR]={ref['mean_adr_mbps']:7.3f} Mb/s")
+    results["Grid reference"] = dict(
+        gamma_deg=float(np.rad2deg(g)), omega_deg=float(np.rad2deg(o)),
+        mean_adr_mbps=float(v / 1e6),
+        adr_k_mbps=[float(x) for x in env.expected_adr(g, o) / 1e6],
+        aoi_k=[float(x) for x in env.avg_aoi_ir(g, o)])
+    print(f"{'GRID':6s} g={results['Grid reference']['gamma_deg']:8.3f}  "
+          f"w={results['Grid reference']['omega_deg']:8.3f}  "
+          f"E[ADR]={results['Grid reference']['mean_adr_mbps']:7.3f} Mb/s")
 
-    # bonus: paper objective (26) -- min-max AoI with the best agent
+    # fairness study: paper objective (26) -- min-max AoI, wide-beam config
     env_aoi = OIRSVLCEnv(seed=SEED, reward_mode="aoi", gamma_bar=3e15,
-                     k_spec=6.0)  # fairness config: wide beam
+                         k_spec=6.0)
     name, curve, a_fin = ecdpo.train(env_aoi, total_steps=TOTAL_STEPS,
-                                     seed=SEED, label="ECDPO-AoI")
+                                     seed=SEED, noise0=0.8,
+                                     noise_decay=0.9995, noise_min=0.08,
+                                     warmup=600, label="ECDPO-AoI")
     res = evaluate(env_aoi, a_fin)
     results["ECDPO-AoI"] = res
     curves["ECDPO-AoI"] = curve
     print(f"{'E-AoI':6s} g={res['gamma_deg']:8.3f}  w={res['omega_deg']:8.3f}  "
           f"E[ADR]={res['mean_adr_mbps']:7.3f} Mb/s  AoImax={res['aoi_max']:.2f}")
 
-    np.savez("curves.npz", **curves)
-    with open("results.json", "w") as f:
-        json.dump(results, f, indent=2)
-
-    # ------- automatically generate all result graphs (PNG + PDF) -------
-    import make_figures
-    make_figures.main()
+    # ---- all result figures, straight from memory (PNG + PDF each) ----
+    make_figures.main(curves, results)
