@@ -1,103 +1,82 @@
+"""ecdpo.py -- Enhanced Continuous Deep Policy Optimization.
+
+*** PLACEHOLDER IMPLEMENTATION -- substitute your actual ECDPO update rule ***
+
+Since the true ECDPO algorithm is proposed in the authors' paper and its
+update equations were not provided, this file implements a plausible
+"enhanced" continuous policy optimizer on a DDPG backbone with four
+enhancements that are individually well-established:
+
+  E1. Twin critics with a minimum operator (clipped double-Q, TD3-style):
+      counters critic over-estimation caused by the noisy stochastic ADR
+      reward from the random UE orientation.
+  E2. Delayed policy updates (actor updated every 2 critic updates):
+      the actor always ascends a better-fitted value surface.
+  E3. Decaying exploration noise (sigma: 0.5 -> 0.05 exponentially):
+      broad global search early, fine alignment of (gamma, omega) late.
+  E4. Huber (smooth-L1) critic loss: robust to outlier rewards produced by
+      rare tail draws of the truncated-Laplace orientation.
+
+Every enhancement is a keyword flag, so ablations are one-liners and the
+class can be rewired to the real ECDPO with minimal edits.
 """
-ECDPO (Hybrid) — Entropy-regularised Clipped Deterministic Policy Optimization
-Combines: DDPG's deterministic actor + SAC's twin-Q critics + PPO-inspired
-          entropy regularisation for exploration stability.
-v_B = (gamma_B*Po)/(b1^2*Pt), v_E = (gamma_E*Po)/(b2^2*Pt), rate = log2(1+A*v)
-Run:  python ecdpo.py
-"""
-import numpy as np, torch, torch.nn as nn, random, copy
-from collections import deque
-from wiretap_env import WiretapEnv, evaluate, plot_learning_curve
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-H, BATCH, GAMMA, TAU, LR = 64, 128, 0.99, 0.005, 3e-4
-ENT_COEF = 0.05        # entropy bonus weight (from SAC's idea, fixed here)
+from common import mlp, Replay, set_seeds
 
-def mlp(dims, out_act=None):
-    layers = []
-    for i in range(len(dims)-1):
-        layers.append(nn.Linear(dims[i], dims[i+1]))
-        if i < len(dims)-2: layers.append(nn.ReLU())
-    if out_act: layers.append(out_act())
-    return nn.Sequential(*layers)
+HID = 64
 
-class Buffer:
-    def __init__(self, cap=80000): self.b = deque(maxlen=cap)
-    def push(self, *tr): self.b.append(tr)
-    def sample(self, n):
-        s,a,r,s2 = zip(*random.sample(self.b, n))
-        f = lambda x: torch.tensor(np.array(x), dtype=torch.float32)
-        return f(s), f(a).unsqueeze(1), f(r).unsqueeze(1), f(s2)
-    def __len__(self): return len(self.b)
 
-def soft(tgt, src):
-    for t,s in zip(tgt.parameters(), src.parameters()):
-        t.data.copy_(TAU*s.data + (1-TAU)*t.data)
+def train(env, total_steps=6000, seed=0, lr_a=3e-4, lr_c=1e-3, batch=128,
+          warmup=200, noise0=0.5, noise_min=0.05, noise_decay=0.9992,
+          twin=True, delayed=True, huber=True, label="ECDPO"):
+    set_seeds(seed)
+    sdim, adim = env.state_dim, env.action_dim
 
-class ECDPO:
-    """
-    Hybrid design:
-      * deterministic sigmoid actor (DDPG) -> precise power at deployment
-      * twin Q-networks with min-target  (SAC/TD3) -> no overestimation bias
-      * Bernoulli-entropy bonus on actor output (PPO/SAC spirit) -> keeps the
-        policy away from saturated boundary actions during learning
-    """
-    def __init__(self, env):
-        self.env = env
-        self.actor = mlp([2,H,H,1], nn.Sigmoid)
-        self.q1 = mlp([3,H,H,1]); self.q2 = mlp([3,H,H,1])
-        self.q1_t = copy.deepcopy(self.q1); self.q2_t = copy.deepcopy(self.q2)
-        self.oa = torch.optim.Adam(self.actor.parameters(), LR)
-        self.oq = torch.optim.Adam(list(self.q1.parameters()) + list(self.q2.parameters()), LR)
-        self.buf = Buffer(); self.noise = 0.15
+    actor = mlp([sdim, HID, HID, adim], nn.Tanh())
+    q1 = mlp([sdim + adim, HID, HID, 1])
+    q2 = mlp([sdim + adim, HID, HID, 1]) if twin else None
+    opt_a = torch.optim.Adam(actor.parameters(), lr_a)
+    params_c = list(q1.parameters()) + (list(q2.parameters()) if twin else [])
+    opt_c = torch.optim.Adam(params_c, lr_c)
+    buf = Replay(sdim, adim)
+    critic_loss = F.smooth_l1_loss if huber else F.mse_loss
 
-    def to_P(self, a01):
-        return self.env.P_min + a01*(self.env.P_max - self.env.P_min)
-
-    def act(self, s, explore=True):
+    s = env.reset()
+    noise = noise0
+    curve = []
+    for t in range(total_steps):
+        st = torch.as_tensor(s).unsqueeze(0)
         with torch.no_grad():
-            a = self.actor(torch.tensor(s).unsqueeze(0)).item()
-        if explore: a = float(np.clip(a + np.random.normal(0, self.noise), 0, 1))
-        return self.to_P(a)
+            a = actor(st).squeeze(0).numpy()
+        if t < warmup:
+            a = np.random.uniform(-1, 1, adim)
+        else:
+            a = np.clip(a + noise * np.random.randn(adim), -1, 1)   # E3
+        _, r, _, info = env.step(a)
+        buf.add(s, a, r)
+        curve.append(info["adr_mean"])
+        noise = max(noise_min, noise * noise_decay)                  # E3
 
-    def update(self):
-        if len(self.buf) < BATCH: return
-        S, A, R, S2 = self.buf.sample(BATCH)
-        # --- twin-Q critic update (min of targets)
-        with torch.no_grad():
-            a2 = self.actor(S2)
-            sa2 = torch.cat([S2, self.to_P(a2)], 1)
-            q_tgt = R + GAMMA*torch.min(self.q1_t(sa2), self.q2_t(sa2))
-        sa = torch.cat([S, A], 1)
-        lq = (self.q1(sa)-q_tgt).pow(2).mean() + (self.q2(sa)-q_tgt).pow(2).mean()
-        self.oq.zero_grad(); lq.backward(); self.oq.step()
-        # --- actor: maximise min-Q + entropy of the (0,1) action
-        a_new = self.actor(S)
-        sa_new = torch.cat([S, self.to_P(a_new)], 1)
-        q_min = torch.min(self.q1(sa_new), self.q2(sa_new))
-        entropy = -(a_new*torch.log(a_new + 1e-8)
-                    + (1-a_new)*torch.log(1-a_new + 1e-8)).mean()
-        la = -q_min.mean() - ENT_COEF*entropy
-        self.oa.zero_grad(); la.backward(); self.oa.step()
-        soft(self.q1_t, self.q1); soft(self.q2_t, self.q2)
+        if buf.n >= batch:
+            bs_, ba, br = buf.sample(batch)
+            qin = torch.cat([bs_, ba], 1)
+            loss_c = critic_loss(q1(qin), br)                        # E4
+            if twin:
+                loss_c = loss_c + critic_loss(q2(qin), br)           # E1
+            opt_c.zero_grad(); loss_c.backward(); opt_c.step()
 
-def train(steps=10000, eval_every=1000):
-    env = WiretapEnv(); agent = ECDPO(env)
-    s = env.reset(); ep = 0; log = []
-    for t in range(1, steps+1):
-        P = agent.act(s)
-        s2, r, _, _ = env.step(P)
-        agent.buf.push(s, P, r, s2); s = s2; ep += 1
-        if ep >= 200: s = env.reset(); ep = 0
-        agent.update()
-        if t % eval_every == 0:
-            avg = evaluate(lambda st: agent.act(st, explore=False), env)
-            log.append((t, avg))
-            print(f'[ECDPO] step {t:6d}  eval avg reward/step = {avg:.4f}')
-    return agent, log
+            if (not delayed) or (t % 2 == 0):                        # E2
+                pa = actor(bs_)
+                qv = q1(torch.cat([bs_, pa], 1))
+                if twin:
+                    qv = torch.min(qv, q2(torch.cat([bs_, pa], 1)))  # E1
+                loss_a = -qv.mean()
+                opt_a.zero_grad(); loss_a.backward(); opt_a.step()
 
-if __name__ == '__main__':
-    torch.manual_seed(0); np.random.seed(0); random.seed(0)
-    agent, log = train()
-    env = agent.env; wf = evaluate(lambda st: env.waterfill_P(*env.denorm(np.asarray(st))), env, n_ep=10)
-    plot_learning_curve(log, 'ECDPO', wf=wf, color='#e34948')
-    print(f'[ECDPO] water-filling baseline = {wf:.4f}')
+    with torch.no_grad():
+        a_fin = actor(torch.as_tensor(s).unsqueeze(0)).squeeze(0).numpy()
+    return label, np.asarray(curve), a_fin
