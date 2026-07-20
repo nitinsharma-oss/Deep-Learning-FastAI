@@ -1,0 +1,372 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{mathtools}
+\usepackage{booktabs}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\newcommand{\E}{\mathbb{E}}
+
+\begin{document}
+
+\title{Outage Performance and Deep Reinforcement Learning-Based Orientation
+Optimization of OIRS-Aided VLC Systems under Realistic UE Orientation
+Constraints}
+
+\maketitle
+
+\begin{abstract}
+Optical intelligent reflecting surface (OIRS)-aided visible light
+communication (VLC) systems effectively mitigate complete line-of-sight (LoS)
+blockages, yet their reliability remains compromised by random user equipment
+(UE) orientations. This paper develops a rigorous analytical and learning
+framework for such links. Adopting a measurement-based truncated-Laplace
+orientation model, we derive the exact moments of the incidence cosine and
+approximate the equivalent non-line-of-sight (NLoS) channel gain with a Gamma
+distribution via exact moment matching. Closed-form outage probability
+expressions follow from the Meijer G-function, and we prove a strict
+``zero-outage'' signal-to-noise ratio (SNR) cliff dictated by the physical
+field-of-view bound---a hard transition absent under conventional uniform
+orientation assumptions. Since the OIRS yaw and roll jointly serving $K$ users
+render the expected achievable data rate (ADR) maximization non-convex with a
+stochastic objective, we cast the orientation design as a continuous-action
+reinforcement learning problem and comparatively evaluate five deep
+reinforcement learning (DRL) algorithms---DDPG, SAC, PPO, CAPG, and the
+proposed ECDPO---under identical conditions. Off-policy agents recover the
+expected-ADR optimum to within $0.5\%$ of an exhaustive grid reference, and
+retraining with a min--max Age of Information (AoI) reward restores fairness
+to users abandoned by throughput-optimal steering, attaining the theoretical
+minimum AoI for all users. Analytical results are validated by Monte Carlo
+simulations throughout.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Deep reinforcement learning, Meijer G-function, optical intelligent
+reflecting surface, outage probability, random UE orientation.
+\end{IEEEkeywords}
+
+\section{Introduction}
+Visible light communication (VLC) is a cornerstone technology for indoor
+Internet of Things (IoT) networks, offering massive unlicensed bandwidth and
+spatial security. Its performance, however, is bottlenecked by line-of-sight
+(LoS) blockages and the stochastic geometry of random user equipment (UE)
+orientations \cite{eroglu2018}. Optical intelligent reflecting surfaces
+(OIRSs) bypass blockages by establishing robust non-line-of-sight (NLoS)
+paths \cite{aboagye2023}, but two gaps persist in their analysis. First,
+existing frameworks frequently assume uniformly distributed UE orientation,
+which assigns equal probability to physically improbable incidence angles,
+artificially inflates the channel variance, and pulls the minimum channel
+gain toward zero, yielding overly pessimistic reliability predictions.
+Second, the orientation of the OIRS itself---a common yaw $\gamma$ and roll
+$\omega$ serving all users---must be \emph{optimized} against an objective
+that is non-convex and, under random UE orientation, observable only through
+noisy samples, precluding closed-form solutions.
+
+This paper addresses both gaps. Our contributions are:
+\begin{itemize}
+\item We derive the exact centralized moments of the incidence cosine under a
+measurement-based truncated-Laplace model \cite{soltani2018} and approximate
+the multi-element NLoS gain with a Gamma distribution via exact moment
+matching, strictly enforcing the receiver field-of-view (FoV) bounds.
+\item We obtain exact closed-form outage probability expressions using the
+Meijer G-function with intensity-modulation/direct-detection (IM/DD) capacity
+bounds, and prove a ``zero-outage cliff'': an SNR beyond which the outage
+probability is exactly zero, in contrast to the polynomial tails of
+unbounded fading models.
+\item We formulate the OIRS orientation design as a stochastic optimization
+of the \emph{expected} achievable data rate (ADR) and solve it with five
+continuous-action deep reinforcement learning (DRL) algorithms---DDPG
+\cite{lillicrap2016}, SAC \cite{haarnoja2018}, PPO \cite{schulman2017}, CAPG,
+and the proposed enhanced continuous deep policy optimization
+(ECDPO)---trained under identical conditions and benchmarked against a
+common-random-number grid search; a min--max Age of Information (AoI) reward
+variant demonstrates cross-layer fairness control.
+\end{itemize}
+
+\section{System Model}
+We consider an indoor VLC system with an $M$-LED access point and $K$
+photodetector (PD)-equipped UEs. The direct LoS links are completely
+obstructed; communication is supported entirely by a wall-mounted OIRS of $N$
+elements acting as a unified reflector with common yaw $\gamma$ and roll
+$\omega$. The equivalent NLoS channel gain of user $k$ is
+\begin{equation}
+Z_k = a_k \sum_{l=1}^{M}\sum_{i=1}^{N} \cos\bigl(\psi_k^{\,i}\bigr),
+\label{eq:Zk}
+\end{equation}
+where $\psi_k^{\,i}$ is the random incidence angle of the path through the
+$i$th element and $a_k$ aggregates the deterministic path loss, Lambertian
+emission, and receiver gains. The OIRS orientation enters through the
+unified-reflector steering: with mirror normal
+$\mathbf n(\gamma,\omega)=R_y(\omega)R_z(\gamma)(1,0,0)^{\mathsf T}$ and
+specular direction $\mathbf d_{\mathrm{ref}}$,
+\begin{equation}
+a_k(\gamma,\omega)=\rho\,\frac{(m+1)A_{\mathrm{pd}}}{2\pi (d_1+d_{2,k})^2}
+\cos^m\!\phi\,
+\bigl(\mathbf d_{\mathrm{ref}}^{\mathsf T}\mathbf u_k\bigr)_+^{\,\kappa},
+\label{eq:ak}
+\end{equation}
+where $d_1$ ($d_{2,k}$) is the LED--OIRS (OIRS--user) distance, $\phi$ the
+LED radiance angle, $\mathbf u_k$ the OIRS$\to$user direction, and $\kappa$
+the reflector beam-concentration exponent.
+
+\subsection{Truncated-Laplace Orientation Statistics}
+Define $\xi=\cos(\psi_k^{\,i})$. Constraining the orientation to practical
+human usage, $\xi$ follows the truncated-Laplace law
+\begin{equation}
+f_{\xi}(\xi) = \frac{1}{\Lambda}\exp\!\left(-\frac{|\xi-\mu_\xi|}{b_\xi}\right),
+\quad \xi\in[\xi_{\min},\xi_{\max}],
+\label{eq:laplace}
+\end{equation}
+where $\mu_\xi$, $b_\xi$ follow from the measured polar-angle statistics
+\cite{soltani2018} and $\xi_{\min}$ is dictated by the receiver FoV. With
+$u=\xi-\mu_\xi$, $\alpha=\xi_{\min}-\mu_\xi\le 0$,
+$\beta=\xi_{\max}-\mu_\xi\ge 0$, splitting the integrals at $u=0$ gives
+\begin{equation}
+\Lambda = b_\xi\bigl[\,2 - e^{\alpha/b_\xi} - e^{-\beta/b_\xi}\bigr],
+\end{equation}
+and, by (repeated) integration by parts, the exact moments
+\begin{equation}
+\E[u] = \frac{b_\xi}{\Lambda}\Bigl[e^{\alpha/b_\xi}(b_\xi-\alpha)
+-e^{-\beta/b_\xi}(\beta+b_\xi)\Bigr],
+\label{eq:moment1}
+\end{equation}
+\begin{equation}
+\begin{aligned}
+\E[u^2] &= \frac{1}{\Lambda}\Bigl\{4b_\xi^3
+- e^{\alpha/b_\xi}\bigl(b_\xi\alpha^2-2b_\xi^2\alpha+2b_\xi^3\bigr)\\
+&\quad\; - e^{-\beta/b_\xi}\bigl(b_\xi\beta^2+2b_\xi^2\beta+2b_\xi^3\bigr)
+\Bigr\},
+\end{aligned}
+\label{eq:moment2}
+\end{equation}
+whence $\E[\xi]=\mu_\xi+\E[u]$ and
+$\mathrm{Var}[\xi]=\E[u^2]-\E[u]^2$.
+
+\subsection{Multi-Element Gamma Approximation}
+The exact PDF of $Z_k$ requires an $MN$-fold convolution of
+\eqref{eq:laplace}, which is intractable in closed form. Matching the exact
+mean $\E[Z_k]=MNa_k\E[\xi]$ and variance
+$\mathrm{Var}[Z_k]=MNa_k^2\mathrm{Var}[\xi]$ to a Gamma law
+\begin{equation}
+f_{Z_{k}}(z) = \frac{z^{k_{g_k}-1}e^{-z/\theta_{g_k}}}
+{\theta_{g_k}^{k_{g_k}}\Gamma(k_{g_k})},
+\quad z \in [L_B,\, MNa_k\xi_{\max}],
+\label{eq:gamma}
+\end{equation}
+with $L_B = MNa_k\xi_{\min}$ the strict physical lower bound, yields
+\begin{equation}
+k_{g_k} = MN\frac{\E[\xi]^2}{\mathrm{Var}[\xi]}, \qquad
+\theta_{g_k} = a_k\frac{\mathrm{Var}[\xi]}{\E[\xi]}.
+\label{eq:matching}
+\end{equation}
+
+\section{Outage Analysis and the Zero-Outage Cliff}
+For IM/DD OOK signaling with target rate $R$, the instantaneous electrical
+SNR is $\gamma_k=|Z_k|^2\bar{\gamma}$ and an outage occurs when $Z_k$ falls
+below
+\begin{equation}
+z_{th} = \sqrt{\frac{2\pi}{e\,\bar{\gamma}} \bigl( 2^{2R} - 1 \bigr)}.
+\label{eq:zth}
+\end{equation}
+Evaluating the Gamma CDF strictly from the physical bound $L_B$ and using the
+Meijer G-representation of the incomplete gamma function (avoiding
+infinite-series truncation errors),
+\begin{equation}
+\begin{aligned}
+P_{out} &= \frac{1}{\Gamma(k_{g_k})} \Biggl[
+G_{1, 2}^{1, 1}\!\left( \frac{z_{th}}{\theta_{g_k}} \,\middle|\,
+\begin{matrix} 1 \\ k_{g_k},\, 0 \end{matrix} \right)\\[2pt]
+&\qquad\qquad
+- G_{1, 2}^{1, 1}\!\left( \frac{L_B}{\theta_{g_k}} \,\middle|\,
+\begin{matrix} 1 \\ k_{g_k},\, 0 \end{matrix} \right) \Biggr].
+\end{aligned}
+\label{eq:pout}
+\end{equation}
+
+\emph{Zero-outage cliff:} unlike Rayleigh/Rician fading, whose support
+extends to zero and whose outage decays polynomially, the truncated-Laplace
+constraint enforces $L_B>0$. Since $z_{th}$ in \eqref{eq:zth} decreases
+monotonically in $\bar{\gamma}$, the condition $z_{th}\le L_B$ is met at
+finite power, whereupon the integral in \eqref{eq:pout} spans a null set and
+$P_{out}$ equals \emph{exactly} zero. Equating $z_{th}=L_B$,
+\begin{equation}
+\bar{\gamma}_{\mathrm{cliff}} = \frac{2\pi}{e}\,
+\frac{2^{2R} - 1}{\left( M N a_k \xi_{\min} \right)^2}.
+\label{eq:cliff}
+\end{equation}
+Under the conventional uniform assumption with support pulled to
+$\xi_{\min}\!\to\!0$, $\bar{\gamma}_{\mathrm{cliff}}\!\to\!\infty$ and no such
+transition exists.
+
+\section{DRL-Based OIRS Orientation Optimization}
+The orientation design problem is
+\begin{equation}
+(\mathrm{P1}):\;\;
+\max_{\gamma,\,\omega}\;
+\E_{\xi}\!\left[\frac{1}{K}\sum_{k=1}^{K}
+\frac{B}{2}\log_{2}\!\left(1+\frac{e}{2\pi}
+\Bigl(\tfrac{P R_{\mathrm{PD}} Z_k}{Q}\Bigr)^{2}\right)\right]
+\label{eq:p1}
+\end{equation}
+subject to $\gamma,\omega\in[-\pi/2,\pi/2]$, where the expectation is over
+the random UE orientations in \eqref{eq:Zk}. Because \eqref{eq:p1} is
+non-convex in $(\gamma,\omega)$ through \eqref{eq:ak} and only noisy samples
+of the objective are observable, we solve it by continuous-action DRL:
+single-step episodes in which the agent observes the (fixed, normalized)
+geometry, outputs $\mathbf a=[\gamma,\omega]$, and receives one fresh draw of
+all $MN$ incidence cosines per user, i.e., the reward is the sampled mean ADR.
+Critics therefore learn the \emph{expected}-ADR surface.
+
+Five algorithms are compared under identical state, action space, reward,
+network width (two hidden layers of 64), seed, and budget (6{,}000
+interactions): \textbf{DDPG} \cite{lillicrap2016} (deterministic actor,
+Gaussian exploration $\sigma{=}0.3$); \textbf{SAC} \cite{haarnoja2018}
+($\tanh$-Gaussian actor, twin soft critics, and \emph{automatic} entropy
+temperature with target $-\dim\mathcal{A}$, which proved essential under the
+noisy reward); \textbf{PPO} \cite{schulman2017} (clipped surrogate, on-policy
+batches of 256 with KL-triggered early stopping and decaying entropy bonus);
+\textbf{CAPG} (continuous-action likelihood-ratio policy gradient with
+moving-average baseline and floored log-std); and \textbf{ECDPO}, an enhanced
+continuous deep policy optimizer employing twin critics with a minimum
+operator against noise-driven overestimation, delayed actor updates, Huber
+critic loss, and exponentially decaying exploration noise
+($0.5\!\to\!0.05$) for coarse-to-fine alignment. A reward-mode switch
+replaces the ADR objective with the cross-layer min--max HARQ-IR AoI
+objective $\min_{\gamma,\omega}\max_k \overline{\Delta}_{k,\mathrm{IR}}$,
+computed in closed form via \eqref{eq:matching} and the Gamma CDF.
+
+\section{Numerical Results}
+A $5{\times}5{\times}3$~m room is simulated with $M{=}1$, $N{=}4$, $K{=}3$
+users, $b_\xi{=}0.036$, $\xi_{\max}{=}0.9574$ \cite{soltani2018},
+$B{=}20$~MHz, $P{=}3$~W, $R_{\mathrm{PD}}{=}0.4$~A/W, $\rho=0.95$, and
+$\kappa{=}20$ for the throughput study. UE-orientation randomness is drawn by
+accept--reject sampling of \eqref{eq:laplace}; all analytical curves are
+validated by Monte Carlo (MC) simulation.
+
+\begin{table}[t]
+\centering
+\caption{Learned orientations after 6{,}000 stochastic interactions.}
+\label{tab:results}
+\begin{tabular}{lcccc}
+\toprule
+Algorithm & $\gamma$ ($^\circ$) & $\omega$ ($^\circ$) &
+$\E[\mathrm{ADR}]$ (Mbit/s) & \% of ref.\\
+\midrule
+DDPG  & 16.54 & $-7.82$ & 36.94 & 99.5 \\
+SAC   & 16.87 & $-8.83$ & 37.11 & 100.0 \\
+PPO   & 6.78  & $-8.72$ & 22.33 & 60.2 \\
+CAPG  & 8.30  & $-7.48$ & 25.10 & 67.6 \\
+ECDPO & 16.92 & $-8.37$ & 37.06 & 99.8 \\
+\midrule
+Grid reference & 16.54 & $-8.77$ & 37.12 & 100 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\columnwidth]{fig1_convergence.pdf}
+\caption{DRL convergence on the stochastic OIRS-VLC channel (moving average
+of the sampled mean ADR) versus the common-random-number grid reference.}
+\label{fig:conv}
+\end{figure}
+
+\emph{Orientation optimization:} Table~\ref{tab:results} and
+Fig.~\ref{fig:conv} show that the off-policy agents (SAC, ECDPO, DDPG)
+recover the expected-ADR optimum to within $0.5\%$, with SAC's automatic
+temperature yielding the closest match. The on-policy agents (PPO, CAPG)
+settle on a shoulder of the multi-user landscape at this budget---a
+sample-efficiency gap consistent with their discard-after-update use of the
+noisy reward, not an algorithmic defect.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\columnwidth]{fig4_outage.pdf}
+\caption{Outage probability vs.\ transmit SNR at the ECDPO-learned
+orientation ($R{=}2$, $\xi_{\min}{=}0.2$): analytical \eqref{eq:pout} vs.\
+MC markers. The truncated-Laplace model reaches any target outage at far
+lower SNR than the bounded uniform model and both hit the exact zero-outage
+cliff \eqref{eq:cliff} at $146$~dB, whereas the conventional
+$\xi_{\min}\!\to\!0$ uniform assumption exhibits no cliff.}
+\label{fig:outage}
+\end{figure}
+
+\emph{Outage validation and cliff:} Fig.~\ref{fig:outage} confirms tight
+agreement between \eqref{eq:pout} and MC throughout the waterfall region. At
+$\bar{\gamma}_{\mathrm{cliff}}\!\approx\!146$~dB, given by \eqref{eq:cliff},
+the analytical and empirical outage drop \emph{exactly} to zero; the
+truncated-Laplace statistics reach $P_{out}{=}10^{-6}$ roughly $8$~dB before
+the bounded uniform model, quantifying the pessimism of uniform bounds, while
+the $\xi_{\min}\!\to\!0$ uniform tail never terminates.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\columnwidth]{fig3_fairness.pdf}
+\caption{Per-user expected ADR (left) and average HARQ-IR AoI (right) at the
+ADR-optimal vs.\ AoI-optimal learned orientations.}
+\label{fig:fair}
+\end{figure}
+
+\emph{Cross-layer fairness:} the throughput-optimal orientation abandons
+UE~1 entirely ($\E[\mathrm{ADR}_1]{=}0$, worst-case AoI $4.5$ rounds),
+evidencing the unfairness of pure rate maximization. Retraining ECDPO with
+the min--max AoI reward on a wide-beam configuration ($\kappa{=}6$,
+$\bar{\gamma}{=}3{\times}10^{15}$) attains per-user AoI
+$[1.5,\,1.5,\,1.5]$---the theoretical minimum, with every user decoding in
+the first HARQ round---matching the min--max grid reference exactly
+(Fig.~\ref{fig:fair}).
+
+\section{Conclusion}
+This paper unified a rigorous outage analysis of OIRS-aided VLC under
+realistic truncated-Laplace UE orientation with a DRL-based optimization of
+the OIRS orientation itself. Exact moment matching yielded a tractable Gamma
+channel characterization and finite Meijer G-function outage expressions, and
+the physical FoV bound was proven to induce an exact zero-outage SNR cliff
+unreachable under conventional uniform assumptions. Framing the orientation
+design as stochastic expected-ADR maximization, off-policy DRL agents
+recovered the grid-search optimum to within $0.5\%$, and a min--max AoI
+reward variant restored fairness to misaligned users at the theoretical AoI
+minimum. These results establish OIRS-aided VLC links as substantially more
+deterministic and controllable than uniform bounds suggest, providing a
+foundation for URLLC-grade MAC design.
+
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{00}
+
+\bibitem{aboagye2023}
+S. Aboagye \emph{et al.}, ``RIS-assisted visible light communication systems:
+A tutorial,'' \emph{IEEE Commun. Surv. Tutor.}, vol. 25, no. 1, pp. 251--288,
+2023.
+
+\bibitem{eroglu2018}
+Y. S. Ero\u{g}lu \emph{et al.}, ``Impact of random receiver orientation on
+visible light communications channel,'' \emph{IEEE Trans. Commun.}, vol. 67,
+no. 2, pp. 1313--1325, 2019.
+
+\bibitem{soltani2018}
+M. D. Soltani \emph{et al.}, ``Modeling the random orientation of mobile
+devices,'' \emph{IEEE Trans. Commun.}, vol. 67, no. 3, pp. 2157--2172, 2019.
+
+\bibitem{lillicrap2016}
+T. P. Lillicrap \emph{et al.}, ``Continuous control with deep reinforcement
+learning,'' in \emph{Proc. ICLR}, 2016.
+
+\bibitem{haarnoja2018}
+T. Haarnoja \emph{et al.}, ``Soft actor-critic: Off-policy maximum entropy
+deep reinforcement learning with a stochastic actor,'' in \emph{Proc. ICML},
+2018, pp. 1861--1870.
+
+\bibitem{schulman2017}
+J. Schulman \emph{et al.}, ``Proximal policy optimization algorithms,''
+\emph{arXiv:1707.06347}, 2017.
+
+\end{thebibliography}
+
+\end{document}
