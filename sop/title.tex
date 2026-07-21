@@ -1,0 +1,136 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{calc}
+\usepackage{setspace}
+\usepackage{array}
+\usepackage{newtxtext,newtxmath}
+\usepackage{eso-pic}
+
+%-------------------------------------------------
+% Colors
+%-------------------------------------------------
+\definecolor{navy}{RGB}{18,42,86}
+\definecolor{navylite}{RGB}{34,64,120}
+\definecolor{gold}{RGB}{192,145,43}
+\definecolor{goldlite}{RGB}{224,184,96}
+\definecolor{graytext}{RGB}{70,70,70}
+\definecolor{paper}{RGB}{252,251,248}
+
+\pagecolor{paper}
+
+%-------------------------------------------------
+% Corner ornament
+%-------------------------------------------------
+\newcommand{\cornerornament}[2]{%
+  \begin{scope}[shift={#1},rotate=#2]
+    \fill[gold] (0,0) -- (0.55,0) -- (0,0.55) -- cycle;
+    \fill[navy] (0.13,0.13) -- (0.42,0.13) -- (0.13,0.42) -- cycle;
+    \draw[gold,line width=0.6pt] (0.78,0) -- (0,0) -- (0,0.78);
+  \end{scope}}
+
+%-------------------------------------------------
+% Decorative border + faint sunburst watermark + ornaments
+%-------------------------------------------------
+\AddToShipoutPictureBG{%
+\begin{tikzpicture}[remember picture,overlay]
+  \begin{scope}[shift={($(current page.center)+(0,1cm)$)},opacity=0.05]
+    \foreach \a in {0,12,...,348}{\draw[navy,line width=1pt] (0,0)--(\a:9cm);}
+    \fill[navy] (0,0) circle (1.1cm);
+  \end{scope}
+  \draw[line width=2.4pt,color=navy]
+    ([xshift=0.7cm,yshift=-0.7cm]current page.north west)
+    rectangle
+    ([xshift=-0.7cm,yshift=0.7cm]current page.south east);
+  \draw[line width=0.9pt,color=gold]
+    ([xshift=0.98cm,yshift=-0.98cm]current page.north west)
+    rectangle
+    ([xshift=-0.98cm,yshift=0.98cm]current page.south east);
+  \cornerornament{($([xshift=0.98cm,yshift=-0.98cm]current page.north west)$)}{-90}
+  \cornerornament{($([xshift=-0.98cm,yshift=-0.98cm]current page.north east)$)}{180}
+  \cornerornament{($([xshift=0.98cm,yshift=0.98cm]current page.south west)$)}{0}
+  \cornerornament{($([xshift=-0.98cm,yshift=0.98cm]current page.south east)$)}{90}
+\end{tikzpicture}}
+
+%-------------------------------------------------
+% Gamma-ray sunburst emblem
+%-------------------------------------------------
+\newcommand{\gammaemblem}{%
+\begin{tikzpicture}
+  \foreach \a in {0,30,...,330}{\draw[gold,line width=1.1pt] (0,0)--(\a:0.9cm);}
+  \foreach \a in {15,45,...,345}{\draw[goldlite,line width=0.6pt] (0,0)--(\a:0.58cm);}
+  \draw[navy,line width=1pt] (0,0) circle (0.32cm);
+  \fill[navy] (0,0) circle (0.28cm);
+  \fill[gold] (0,0) circle (0.13cm);
+  \fill[paper] (0,0) circle (0.045cm);
+\end{tikzpicture}}
+
+\begin{document}
+\thispagestyle{empty}
+\begin{center}
+\vspace*{0.05cm}
+
+%------------------- Logos -------------------
+\begin{tabular}{@{}c@{\hspace{1.4cm}}c@{}}
+  \includegraphics[height=2.4cm]{curaj.jpeg} &
+  \includegraphics[height=2.4cm]{iitj.jpeg}
+\end{tabular}
+
+\vspace{0.3cm}
+{\large\color{graytext}\itshape Internship carried out at}\\[0.18cm]
+{\Large\bfseries\color{navy} Indian Institute of Technology Jodhpur}
+
+\vspace{0.28cm}
+\begin{tikzpicture}
+  \draw[gold,line width=1.1pt] (-4.2,0)--(-0.55,0);
+  \fill[gold] (-0.35,0) -- (0,0.16) -- (0.35,0) -- (0,-0.16) -- cycle;
+  \draw[gold,line width=1.1pt] (0.55,0)--(4.2,0);
+\end{tikzpicture}
+
+\vspace{0.4cm}
+{\Large\bfseries\color{navy}INTERNSHIP REPORT}\\[0.12cm]
+{\large\itshape\color{graytext}on}
+
+\vspace{0.4cm}
+\gammaemblem
+
+\vspace{0.3cm}
+%------------------- Title panel -------------------
+\begin{tikzpicture}
+  \node[fill=navy,draw=gold,line width=1pt,rounded corners=12pt,
+        inner xsep=24pt,inner ysep=16pt,text width=0.80\linewidth,align=center]
+  {%
+    \color{white}\LARGE\bfseries Gamma-Ray Emission Model for\\[0.24cm]
+    Astrophysical Radiation Analysis\\[0.42cm]
+    {\color{goldlite}\Large (GAMERA)}%
+  };
+\end{tikzpicture}
+
+\vspace{0.5cm}
+\textcolor{gold}{\rule{0.62\linewidth}{0.9pt}}
+
+\vspace{0.4cm}
+%------------------- Submitted by -------------------
+{\large\itshape\color{graytext}Submitted by}\\[0.22cm]
+{\huge\bfseries\color{navy}Palak Joya}\\[0.22cm]
+{\large M.Sc.\ B.Ed.\ (Innovative) Physics}\\[0.06cm]
+{\normalsize\color{graytext}Enrolment No.: 2025MSBPH018}\\[0.06cm]
+{\normalsize School of Physical Sciences}\\[0.08cm]
+{\large\bfseries\color{navy}Central University of Rajasthan}
+
+\vspace{0.45cm}
+%------------------- Supervisor -------------------
+{\large\itshape\color{graytext}Under the Supervision of}\\[0.22cm]
+{\LARGE\bfseries\color{navy}Dr.\ Reetanjali Moharana}\\[0.16cm]
+{\large Associate Professor}\\[0.05cm]
+{\large Department of Physics}\\[0.07cm]
+{\large\bfseries\color{navy}Indian Institute of Technology Jodhpur}
+
+\vfill
+\textcolor{gold}{\rule{0.72\linewidth}{1pt}}\\[0.28cm]
+{\large Date of Submission:\; \textbf{\color{navy}July 20, 2026}}
+\vspace{0.15cm}
+\end{center}
+\end{document}
