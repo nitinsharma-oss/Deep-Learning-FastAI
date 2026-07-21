@@ -1,420 +1,370 @@
 \documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{mathtools}
 \usepackage{booktabs}
-\usepackage{cite}
-\usepackage[hidelinks]{hyperref}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\newcommand{\E}{\mathbb{E}}
 
 \begin{document}
 
-\title{A Truncated-Laplace Incidence Model and its Moment-Matched Gamma
-Approximation for the Aggregate Gain of OIRS-Assisted Optical Wireless Links}
-
-\author{\IEEEauthorblockN{Author Name(s)}
-\IEEEauthorblockA{Affiliation, Department\\
-City, Country\\
-Email: name@domain}}
+\title{Outage Performance and Deep Reinforcement Learning-Based Orientation
+Optimization of OIRS-Aided VLC Systems under Realistic UE Orientation
+Constraints}
 
 \maketitle
 
 \begin{abstract}
-Optical intelligent reflecting surfaces (OIRSs) create controllable
-non-line-of-sight (NLoS) paths in optical wireless communication (OWC)
-systems, but the resulting aggregate channel gain is analytically awkward
-because it depends on the \emph{cosine of the incidence angle} at each
-reflecting element, a bounded random quantity. In this paper we model the
-incidence cosine as a \emph{truncated-Laplace} random variable defined on a
-geometry-imposed interval, derive its exact first and second moments in
-closed form, and use moment matching to approximate the aggregate gain
-$Z_k$ of an $M$-LED, $N$-element OIRS link by a Gamma distribution. Closed
-forms for the Gamma shape $k_g$ and scale $\theta_g$ are given directly in
-terms of the truncation limits. The approximation is verified against
-$10^{5}$-sample Monte~Carlo simulations using the Bhattacharyya similarity
-coefficient (BSC) for the probability density function (PDF) and the
-Kolmogorov--Smirnov (K--S) maximum distance for the cumulative distribution
-function (CDF). For the single-path reference case ($M{=}N{=}1$) the fit
-already attains a BSC of 97.33\%; as the number of aggregated
-paths $MN$ grows, the fit tightens monotonically toward a BSC exceeding
-99.9\% and a K--S distance below $0.013$, consistent with the
-central-limit behaviour of the sum. The result provides a tractable channel
-model for outage and error-rate analysis of OIRS-assisted OWC.
+Optical intelligent reflecting surface (OIRS)-aided visible light
+communication (VLC) systems effectively mitigate complete line-of-sight (LoS)
+blockages, yet their reliability remains compromised by random user equipment
+(UE) orientations. This paper develops a rigorous analytical and learning
+framework for such links. Adopting a measurement-based truncated-Laplace
+orientation model, we derive the exact moments of the incidence cosine and
+approximate the equivalent non-line-of-sight (NLoS) channel gain with a Gamma
+distribution via exact moment matching. Closed-form outage probability
+expressions follow from the Meijer G-function, and we prove a strict
+``zero-outage'' signal-to-noise ratio (SNR) cliff dictated by the physical
+field-of-view bound---a hard transition absent under conventional uniform
+orientation assumptions. Since the OIRS yaw and roll jointly serving $K$ users
+render the expected achievable data rate (ADR) maximization non-convex with a
+stochastic objective, we cast the orientation design as a continuous-action
+reinforcement learning problem and comparatively evaluate five deep
+reinforcement learning (DRL) algorithms---DDPG, SAC, PPO, CAPG, and the
+proposed ECDPO---under identical conditions. Off-policy agents recover the
+expected-ADR optimum to within $0.5$ of an exhaustive grid reference, and
+retraining with a min--max Age of Information (AoI) reward restores fairness
+to users abandoned by throughput-optimal steering, attaining the theoretical
+minimum AoI for all users. Analytical results are validated by Monte Carlo
+simulations throughout.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Optical wireless communication, optical intelligent reflecting surface,
-truncated Laplace distribution, moment matching, Gamma distribution,
-channel statistics.
+Deep reinforcement learning, Meijer G-function, optical intelligent
+reflecting surface, outage probability, random UE orientation.
 \end{IEEEkeywords}
 
 \section{Introduction}
-Reconfigurable/intelligent reflecting surfaces have emerged as a means of
-shaping the propagation environment in wireless systems~\cite{basar2019}, and
-the concept transfers naturally to the optical band, where an optical
-intelligent reflecting surface (OIRS) can redirect light to establish a
-controllable non-line-of-sight (NLoS) path when the direct
-line-of-sight link is blocked. Optical wireless links driven by LED
-sources are well studied in the line-of-sight case~\cite{komine2004}, but the
-OIRS-assisted NLoS gain is harder to characterise: each reflecting element
-contributes a term that scales with the \emph{cosine of the incidence angle}
-$\xi$, and $\xi$ is a bounded random variable whose range is fixed by the
-device geometry and the receiver field of view (FoV).
+Visible light communication (VLC) is a cornerstone technology for indoor
+Internet of Things (IoT) networks, offering massive unlicensed bandwidth and
+spatial security. Its performance, however, is bottlenecked by line-of-sight
+(LoS) blockages and the stochastic geometry of random user equipment (UE)
+orientations \cite{eroglu2018}. Optical intelligent reflecting surfaces
+(OIRSs) bypass blockages by establishing robust non-line-of-sight (NLoS)
+paths \cite{aboagye2023}, but two gaps persist in their analysis. First,
+existing frameworks frequently assume uniformly distributed UE orientation,
+which assigns equal probability to physically improbable incidence angles,
+artificially inflates the channel variance, and pulls the minimum channel
+gain toward zero, yielding overly pessimistic reliability predictions.
+Second, the orientation of the OIRS itself---a common yaw $\gamma$ and roll
+$\omega$ serving all users---must be \emph{optimized} against an objective
+that is non-convex and, under random UE orientation, observable only through
+noisy samples, precluding closed-form solutions.
 
-Exact distributions of such angle-dependent gains are typically intractable,
-so accurate yet simple surrogate distributions are valuable for downstream
-performance analysis (outage probability, bit-error rate, ergodic rate). In
-this paper we (i) adopt a \emph{truncated-Laplace} model for the incidence
-cosine $\xi$, which captures a sharp mode with light, bounded tails; (ii)
-derive its exact first and second moments in closed form over the truncation
-interval; (iii) obtain, by moment matching, a Gamma approximation of the
-aggregate gain $Z_k$ of an $M$-LED, $N$-element link, with closed-form shape
-and scale; and (iv) verify the approximation against Monte~Carlo simulation
-using two complementary goodness-of-fit measures. The moment-matching idea
-is classical~\cite{papoulis2002}; our contribution is the closed-form
-truncated-Laplace moments and the demonstration that the resulting Gamma
-model is asymptotically tight in the number of aggregated paths.
+This paper addresses both gaps. Our contributions are:
+\begin{itemize}
+\item We derive the exact centralized moments of the incidence cosine under a
+measurement-based truncated-Laplace model \cite{soltani2018} and approximate
+the multi-element NLoS gain with a Gamma distribution via exact moment
+matching, strictly enforcing the receiver field-of-view (FoV) bounds.
+\item We obtain exact closed-form outage probability expressions using the
+Meijer G-function with intensity-modulation/direct-detection (IM/DD) capacity
+bounds, and prove a ``zero-outage cliff'': an SNR beyond which the outage
+probability is exactly zero, in contrast to the polynomial tails of
+unbounded fading models.
+\item We formulate the OIRS orientation design as a stochastic optimization
+of the \emph{expected} achievable data rate (ADR) and solve it with five
+continuous-action deep reinforcement learning (DRL) algorithms---DDPG
+\cite{lillicrap2016}, SAC \cite{haarnoja2018}, PPO \cite{schulman2017}, CAPG,
+and the proposed enhanced continuous deep policy optimization
+(ECDPO)---trained under identical conditions and benchmarked against a
+common-random-number grid search; a min--max Age of Information (AoI) reward
+variant demonstrates cross-layer fairness control.
+\end{itemize}
 
-\emph{Notation.} $\mathbb{E}[\cdot]$ is expectation, $\mathrm{Var}[\cdot]$
-variance, and $\Gamma(k_g,\theta_g)$ the Gamma distribution with shape
-$k_g$ and scale $\theta_g$.
-
-\section{Related Work}
-\label{sec:related}
-The idea of engineering the propagation environment with reconfigurable
-surfaces was popularised for radio-frequency systems~\cite{basar2019} and
-has since been carried into the optical domain, where reflectors steer
-LED-generated light along controllable NLoS paths. Classical LED-based OWC
-analysis, however, is dominated by the line-of-sight Lambertian
-model~\cite{komine2004}, in which the received power depends deterministically
-on the irradiance and incidence angles; randomness enters only through user
-mobility or blockage. OIRS-assisted links differ in that the reflected
-contribution of each element is modulated by the \emph{incidence-angle cosine}
-at the surface, which is naturally a bounded random quantity once the user
-position, panel orientation, and receiver FoV are treated statistically.
-
-For tractability, prior OWC studies frequently replace an intractable exact
-gain distribution with a moment-matched surrogate; the Gamma and log-normal
-families are common choices because their moments map cleanly to physical
-parameters~\cite{papoulis2002}. Our approach follows this tradition but
-differs in two respects. First, we motivate the surrogate from an explicit
-\emph{truncated-Laplace} model of the incidence cosine---a heavier-peaked,
-strictly bounded alternative to the truncated-Gaussian---and derive its
-moments in closed form. Second, rather than asserting the surrogate's
-accuracy, we characterise it quantitatively with two goodness-of-fit measures
-and show how the fit scales with the array size, giving the designer an
-explicit validity regime.
-
-\section{System and Channel Model}
-\label{sec:model}
-We consider an OWC link with $M$ LED transmitters and an OIRS of $N$
-reflecting elements establishing an NLoS path to a photodetector receiver.
-The aggregate NLoS channel gain is written as
+\section{System Model}
+We consider an indoor VLC system with an $M$-LED access point and $K$
+photodetector (PD)-equipped UEs. The direct LoS links are completely
+obstructed; communication is supported entirely by a wall-mounted OIRS of $N$
+elements acting as a unified reflector with common yaw $\gamma$ and roll
+$\omega$. The equivalent NLoS channel gain of user $k$ is
 \begin{equation}
-Z_k \;=\; \sum_{m=1}^{M}\sum_{n=1}^{N} a_k \,\xi_{mn},
-\label{eq:agg}
+Z_k = a_k \sum_{l=1}^{M}\sum_{i=1}^{N} \cos\bigl(\psi_k^{i}\bigr),
+\label{eq:Zk}
 \end{equation}
-where $\xi_{mn}$ is the cosine of the incidence angle at element $n$ for LED
-$m$, and $a_k$ is a deterministic per-path scalar collecting the optical
-path loss, detector responsivity/area, and element reflectivity for
-configuration $k$.
-
-\noindent\textbf{[Author to insert:]} \emph{the explicit expression for
-$a_k$ from the link geometry (transmit power, Lambertian order, source--OIRS
-and OIRS--receiver distances, effective areas, FoV). In the verification
-below we use the worked-example value $a_k=10^{-6}$ from
-Section~\ref{sec:results}, so that the statistical claims are independent of
-the specific path-loss algebra; substituting the exact $a_k$ rescales
-$Z_k$ but leaves the shape parameter $k_g$ and all goodness-of-fit metrics
-unchanged.}
-
-Because the $\xi_{mn}$ are bounded by the FoV and the surface geometry, and
-concentrate around a nominal incidence, we model each as an independent and
-identically distributed truncated-Laplace variable, defined next.
-
-\section{Statistical Characterization of the Incidence Cosine}
-\label{sec:stats}
-Let $\xi$ be Laplace-distributed with location $\mu_\xi$ and scale $b_\xi$,
-truncated to the geometry-imposed interval $[\xi_{\min},\xi_{\max}]$, with
-$0\le\xi_{\min}$ (FoV limit) and $\xi_{\max}\le 1$ (upper geometric bound).
-Introducing the centred variable $u=\xi-\mu_\xi$ on $[\alpha,\beta]$ with
+where $\psi_k^{i}$ is the random incidence angle of the path through the
+$i$th element and $a_k$ aggregates the deterministic path loss, Lambertian
+emission, and receiver gains. The OIRS orientation enters through the
+unified-reflector steering: with mirror normal
+$\mathbf n(\gamma,\omega)=\mathbf R_y(\omega)\mathbf R_z(\gamma)(1,0,0)^{\mathsf T}$
+and specular direction $\mathbf d_{\mathrm{ref}}$,
 \begin{equation}
-\alpha=\xi_{\min}-\mu_\xi\le 0,\qquad \beta=\xi_{\max}-\mu_\xi\ge 0,
+a_k(\gamma,\omega)=\rho\,\frac{(m+1)A_{\mathrm{pd}}}{2\pi (d_1+d_{2,k})^2}
+\cos^m\!\phi\,
+\bigl(\mathbf d_{\mathrm{ref}}^{\mathsf T}\mathbf u_k\bigr)_{+}^{\kappa},
+\label{eq:ak}
 \end{equation}
-the truncated density is $p(u)=\Lambda^{-1}\exp(-|u|/b_\xi)$ with
-normalisation
-\begin{equation}
-\Lambda=\int_{\alpha}^{\beta}e^{-|u|/b_\xi}\,du
-      =b_\xi\!\left(2-e^{\alpha/b_\xi}-e^{-\beta/b_\xi}\right).
-\label{eq:Lambda}
-\end{equation}
+where $d_1$ ($d_{2,k}$) is the LED--OIRS (OIRS--user) distance, $\phi$ the
+LED radiance angle, $\mathbf u_k$ the OIRS$\to$user direction, and $\kappa$
+the reflector beam-concentration exponent.
 
-\subsection{First moment}
-Because $|u|=-u$ on $[\alpha,0]$ and $|u|=u$ on $[0,\beta]$, the first moment
-splits as
+\subsection{Truncated-Laplace Orientation Statistics}
+Define $\xi=\cos(\psi_k^{i})$. Constraining the orientation to practical
+human usage, $\xi$ follows the truncated-Laplace law
 \begin{equation}
-\mathbb{E}[u]=\frac{1}{\Lambda}\!\left[
-\int_{\alpha}^{0}\! u\,e^{u/b_\xi}\,du
-+\int_{0}^{\beta}\! u\,e^{-u/b_\xi}\,du\right].
+f_{\xi}(\xi) = \frac{1}{\Lambda}\exp\!\left(-\frac{|\xi-\mu_\xi|}{b_\xi}\right),
+\quad \xi\in[\xi_{\min},\xi_{\max}],
+\label{eq:laplace}
 \end{equation}
-Using $\int u\,e^{u/b}\,du=e^{u/b}(bu-b^2)$ and
-$\int u\,e^{-u/b}\,du=-e^{-u/b}(bu+b^2)$ and evaluating the limits, the two
-constant terms at $u=0$ cancel and one obtains the closed form
+where $\mu_\xi$, $b_\xi$ follow from the measured polar-angle statistics
+\cite{soltani2018} and $\xi_{\min}$ is dictated by the receiver FoV. With
+$u=\xi-\mu_\xi$, $\alpha=\xi_{\min}-\mu_\xi\le 0$,
+$\beta=\xi_{\max}-\mu_\xi\ge 0$, splitting the integrals at $u=0$ gives
 \begin{equation}
-\mathbb{E}[u]=\frac{b_\xi}{\Lambda}
-\!\left[e^{\alpha/b_\xi}(b_\xi-\alpha)-e^{-\beta/b_\xi}(\beta+b_\xi)\right].
-\label{eq:Eu}
+\Lambda = b_\xi\bigl[2 - e^{\alpha/b_\xi} - e^{-\beta/b_\xi}\bigr],
+\end{equation}
+and, by (repeated) integration by parts, the exact moments
+\begin{equation}
+\E[u] = \frac{b_\xi}{\Lambda}\Bigl[e^{\alpha/b_\xi}(b_\xi-\alpha)
+-e^{-\beta/b_\xi}(\beta+b_\xi)\Bigr],
+\label{eq:moment1}
+\end{equation}
+\begin{equation}
+\begin{aligned}
+\E[u^2] &= \frac{1}{\Lambda}\Bigl[\,4b_\xi^3
+- e^{\alpha/b_\xi}\bigl(b_\xi\alpha^2-2b_\xi^2\alpha+2b_\xi^3\bigr)\\
+&\quad\; - e^{-\beta/b_\xi}\bigl(b_\xi\beta^2+2b_\xi^2\beta+2b_\xi^3\bigr)
+\Bigr],
+\end{aligned}
+\label{eq:moment2}
+\end{equation}
+whence $\E[\xi]=\mu_\xi+\E[u]$ and
+$\mathrm{Var}[\xi]=\E[u^2]-\E[u]^2$.
+
+\subsection{Multi-Element Gamma Approximation}
+The exact PDF of $Z_k$ requires an $MN$-fold convolution of
+\eqref{eq:laplace}, which is intractable in closed form. Matching the exact
+mean $\E[Z_k]=MNa_k\E[\xi]$ and variance
+$\mathrm{Var}[Z_k]=MNa_k^2\mathrm{Var}[\xi]$ to a Gamma law
+\begin{equation}
+f_{Z_{k}}(z) = \frac{z^{k_{g_k}-1}e^{-z/\theta_{g_k}}}
+{\theta_{g_k}^{k_{g_k}}\Gamma(k_{g_k})},
+\quad z \in [L_B,\, MNa_k\xi_{\max}],
+\label{eq:gamma}
+\end{equation}
+with $L_B=MNa_k\xi_{\min}$ the strict physical lower bound, yields
+\begin{equation}
+k_{g_k} = MN\frac{\E[\xi]^2}{\mathrm{Var}[\xi]}, \qquad
+\theta_{g_k} = a_k\frac{\mathrm{Var}[\xi]}{\E[\xi]}.
+\label{eq:matching}
 \end{equation}
 
-\subsection{Second moment}
-Applying the same split with
-$\int u^{2}e^{u/b}\,du=e^{u/b}(bu^{2}-2b^{2}u+2b^{3})$ and
-$\int u^{2}e^{-u/b}\,du=-e^{-u/b}(bu^{2}+2b^{2}u+2b^{3})$, the $u=0$ terms
-combine to $4b_\xi^{3}$ and
-\begin{align}
-\mathbb{E}[u^2]=\frac{1}{\Lambda}\Big[&\,4b_\xi^{3}
-- e^{\alpha/b_\xi}\!\big(b_\xi\alpha^{2}-2b_\xi^{2}\alpha+2b_\xi^{3}\big)
-\nonumber\\
-&- e^{-\beta/b_\xi}\!\big(b_\xi\beta^{2}+2b_\xi^{2}\beta+2b_\xi^{3}\big)\Big].
-\label{eq:Eu2}
-\end{align}
-The moments of the incidence cosine follow immediately:
+\section{Outage Analysis and the Zero-Outage Cliff}
+For IM/DD OOK signaling with target rate $R$, the instantaneous electrical
+SNR is $\gamma_k=|Z_k|^2\bar{\gamma}$ and an outage occurs when $Z_k$ falls
+below
 \begin{equation}
-\mathbb{E}[\xi]=\mu_\xi+\mathbb{E}[u],\qquad
-\mathrm{Var}[\xi]=\mathbb{E}[u^2]-\mathbb{E}[u]^2.
-\label{eq:xi}
+z_{th} = \sqrt{\frac{2\pi}{e\,\bar{\gamma}} \bigl( 2^{2R} - 1 \bigr)}.
+\label{eq:zth}
 \end{equation}
-Equations \eqref{eq:Lambda}--\eqref{eq:xi} are exact for any admissible
-$(\mu_\xi,b_\xi,\xi_{\min},\xi_{\max})$; no series truncation or numerical
-integration is required.
-
-\section{Moment-Matched Gamma Approximation}
-\label{sec:gamma}
-Since the $\xi_{mn}$ in \eqref{eq:agg} are i.i.d.\ and $a_k$ is deterministic,
-the mean and variance of the aggregate gain are
+Evaluating the Gamma CDF strictly from the physical bound $L_B$ and using the
+Meijer G-representation of the incomplete gamma function (avoiding
+infinite-series truncation errors),
 \begin{equation}
-\mathbb{E}[Z_k]=MN\,a_k\,\mathbb{E}[\xi],\qquad
-\mathrm{Var}[Z_k]=MN\,a_k^{2}\,\mathrm{Var}[\xi].
-\label{eq:Zmoments}
+\begin{aligned}
+P_{out} &= \frac{1}{\Gamma(k_{g_k})} \Biggl[
+G_{1, 2}^{1, 1}\!\left( \frac{z_{th}}{\theta_{g_k}} \,\middle|\,
+\begin{matrix} 1 \\ k_{g_k},\, 0 \end{matrix} \right)\\[2pt]
+&\qquad\qquad
+- G_{1, 2}^{1, 1}\!\left( \frac{L_B}{\theta_{g_k}} \,\middle|\,
+\begin{matrix} 1 \\ k_{g_k},\, 0 \end{matrix} \right) \Biggr].
+\end{aligned}
+\label{eq:pout}
 \end{equation}
-The gain $Z_k$ is non-negative and, being a sum of many bounded positive
-contributions, is unimodal and right-supported---properties shared by the
-Gamma family. Matching the first two moments of a $\Gamma(k_g,\theta_g)$
-variate to \eqref{eq:Zmoments} gives the closed forms
+\emph{Zero-outage cliff:} unlike Rayleigh/Rician fading, whose support
+extends to zero and whose outage decays polynomially, the truncated-Laplace
+constraint enforces $L_B>0$. Since $z_{th}$ in \eqref{eq:zth} decreases
+monotonically in $\bar{\gamma}$, the condition $z_{th}\le L_B$ is met at
+finite power, whereupon the integral in \eqref{eq:pout} spans a null set and
+$P_{out}$ equals \emph{exactly} zero. Equating $z_{th}=L_B$,
 \begin{equation}
-k_g=\frac{\mathbb{E}[Z_k]^2}{\mathrm{Var}[Z_k]}
-   =\frac{MN\,\mathbb{E}[\xi]^2}{\mathrm{Var}[\xi]},\qquad
-\theta_g=\frac{\mathrm{Var}[Z_k]}{\mathbb{E}[Z_k]}
-        =\frac{a_k\,\mathrm{Var}[\xi]}{\mathbb{E}[\xi]}.
-\label{eq:kgtheta}
+\bar{\gamma}_{\mathrm{cliff}} = \frac{2\pi}{e}\,
+\frac{2^{2R} - 1}{\left( M N a_k \xi_{\min} \right)^2}.
+\label{eq:cliff}
 \end{equation}
-The approximate PDF and CDF of the aggregate gain are then
+Under the conventional uniform assumption with support pulled to
+$\xi_{\min}\!\to\!0$, $\bar{\gamma}_{\mathrm{cliff}}\!\to\!\infty$ and no such
+transition exists.
+
+\section{DRL-Based OIRS Orientation Optimization}
+The orientation design problem is
 \begin{equation}
-f_{Z_k}(z)\!\approx\!\frac{z^{k_g-1}e^{-z/\theta_g}}
-{\Gamma(k_g)\,\theta_g^{k_g}},\;\;
-F_{Z_k}(z)\!\approx\!\frac{\gamma\!\left(k_g,\,z/\theta_g\right)}{\Gamma(k_g)},
-\label{eq:gammapdf}
+(\mathrm{P1}):\;\;
+\max_{\gamma,\,\omega}\;
+\E_{\xi}\!\left[\frac{1}{K}\sum_{k=1}^{K}
+\frac{B}{2}\log_{2}\!\left(1+\frac{e}{2\pi}
+\Bigl(\tfrac{P R_{\mathrm{PD}} Z_k}{Q}\Bigr)^{2}\right)\right]
+\label{eq:p1}
 \end{equation}
-where $\gamma(\cdot,\cdot)$ is the lower incomplete Gamma function.
+subject to $\gamma,\omega\in[-\pi/2,\pi/2]$, where the expectation is over
+the random UE orientations in \eqref{eq:Zk}. Because \eqref{eq:p1} is
+non-convex in $(\gamma,\omega)$ through \eqref{eq:ak} and only noisy samples
+of the objective are observable, we solve it by continuous-action DRL:
+single-step episodes in which the agent observes the (fixed, normalized)
+geometry, outputs $\mathbf a=[\gamma,\omega]$, and receives one fresh draw of
+all $MN$ incidence cosines per user, i.e., the reward is the sampled mean ADR.
+Critics therefore learn the \emph{expected}-ADR surface.
 
-A key structural observation follows from \eqref{eq:kgtheta}: the shape
-parameter scales \emph{linearly} with the number of aggregated paths,
-$k_g\propto MN$, while $\theta_g$ is independent of $MN$. As $MN$ grows the
-Gamma distribution therefore becomes increasingly concentrated and
-Gaussian-like, matching the central-limit behaviour of the sum in
-\eqref{eq:agg}. We should thus expect the approximation to be \emph{loosest}
-for the single-path case $M{=}N{=}1$ and to tighten monotonically with
-$MN$---a prediction we confirm numerically below.
+Five algorithms are compared under identical state, action space, reward,
+network width (two hidden layers of 64), seed, and budget (6{,}000
+interactions): \textbf{DDPG} \cite{lillicrap2016} (deterministic actor,
+Gaussian exploration $\sigma=0.3$); \textbf{SAC} \cite{haarnoja2018}
+($\tanh$-Gaussian actor, twin soft critics, and \emph{automatic} entropy
+temperature with target $-\dim\mathcal{A}$, which proved essential under the
+noisy reward); \textbf{PPO} \cite{schulman2017} (clipped surrogate, on-policy
+batches of 256 with KL-triggered early stopping and decaying entropy bonus);
+\textbf{CAPG} (continuous-action likelihood-ratio policy gradient with
+moving-average baseline and floored log-std); and \textbf{ECDPO}, an enhanced
+continuous deep policy optimizer employing twin critics with a minimum
+operator against noise-driven overestimation, delayed actor updates, Huber
+critic loss, and exponentially decaying exploration noise
+($0.5\!\to\!0.05$) for coarse-to-fine alignment. A reward-mode switch
+replaces the ADR objective with the cross-layer min--max HARQ-IR AoI
+objective $\min_{\gamma,\omega}\max_k \bar{\Delta}_{k,\mathrm{IR}}$,
+computed in closed form via \eqref{eq:matching} and the Gamma CDF.
 
-\section{Numerical Results and Verification}
-\label{sec:results}
-\subsection{Setup}
-We use the worked-example geometry parameters
-$\mu_\xi=0.8789$, $b_\xi=0.03600$, $\xi_{\min}=0$, $\xi_{\max}=0.9574$, and
-$a_k=10^{-6}$. Monte~Carlo baselines use $N_{\mathrm{mc}}=10^{5}$
-realisations of $Z_k$; truncated-Laplace samples are drawn by inverse-CDF
-Laplace generation followed by accept--reject rejection of samples outside
-$[\xi_{\min},\xi_{\max}]$. Substituting the parameters into
-\eqref{eq:xi} gives the exact single-element moments
-\begin{equation}
-\mathbb{E}[\xi]=0.87204,\qquad \mathrm{Var}[\xi]=1.838\times10^{-3},
-\end{equation}
-in close agreement with the Monte~Carlo estimates
-($\widehat{\mathbb{E}}[\xi]=0.87217$,
-$\widehat{\mathrm{Var}}[\xi]=1.832\times10^{-3}$), which validates the
-closed-form moment expressions \eqref{eq:Eu}--\eqref{eq:Eu2}.
-
-\subsection{Sampling methodology and complexity}
-Truncated-Laplace realisations are generated by drawing an untruncated
-Laplace variate---via the inverse-CDF rule
-$\xi=\mu_\xi-b_\xi\,\mathrm{sgn}(U)\ln(1-2|U|)$ with $U\!\sim\!
-\mathcal{U}(-\tfrac12,\tfrac12)$---and rejecting draws outside
-$[\xi_{\min},\xi_{\max}]$. For the example parameters the acceptance
-probability is
-\begin{equation}
-\Pr\{\xi_{\min}\!\le\!\xi\!\le\!\xi_{\max}\}
-=F_L(\xi_{\max})-F_L(\xi_{\min})=0.9435,
-\end{equation}
-where $F_L$ is the untruncated Laplace CDF; i.e.\ 94.35\% of
-draws are retained, so the generator is efficient and no importance
-reweighting is needed. Because acceptance is high and independent across
-paths, the cost of building the aggregate in \eqref{eq:agg} scales as
-$\mathcal{O}(N_{\mathrm{mc}}MN)$, which is what allows the $MN$ sweep of
-Table~\ref{tab:sweep} to be produced at $N_{\mathrm{mc}}=10^{5}$ in
-seconds.
-
-\subsection{Goodness-of-fit measures}
-We quantify the PDF match by the Bhattacharyya similarity coefficient
-\begin{equation}
-\mathrm{BSC}=\sum_{i}\sqrt{P_{\mathrm{emp}}(i)\,P_{\mathrm{ana}}(i)}
-\in[0,1],
-\end{equation}
-where $P_{\mathrm{emp}}$ and $P_{\mathrm{ana}}$ are the empirical and
-analytical bin probabilities ($\mathrm{BSC}=1$ is a perfect match), and the
-CDF match by the Kolmogorov--Smirnov maximum distance
-\begin{equation}
-D_{\mathrm{KS}}=\sup_z\bigl|F_{\mathrm{emp}}(z)-F_{Z_k}(z)\bigr|.
-\end{equation}
-
-\subsection{Single-path reference case ($M{=}N{=}1$)}
-The moment-matched parameters are $k_g=413.82$ and
-$\theta_g=2.107\times10^{-9}$. Fig.~\ref{fig:mn1} overlays the analytical
-Gamma PDF/CDF on the Monte~Carlo histogram/empirical CDF. As anticipated in
-Section~\ref{sec:gamma}, this hardest case is where the Gamma and the (left-
-skewed, upper-truncated) empirical density differ most, yet the fit is
-already good: $\mathrm{BSC}=97.33\%$ and
-$D_{\mathrm{KS}}=0.0835$.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{fit_base_MN1.png}
-\caption{Verification for the single-path case $M{=}N{=}1$
-($k_g=413.82$, $\theta_g=2.107\times10^{-9}$). Top: PDF; bottom: CDF.
-This is the loosest case of the family
-($\mathrm{BSC}=97.33\%$, $D_{\mathrm{KS}}=0.0835$).}
-\label{fig:mn1}
-\end{figure}
-
-\subsection{Effect of path aggregation}
-Table~\ref{tab:sweep} sweeps $MN$. Consistent with $k_g\propto MN$, the
-Gamma fit tightens monotonically: the BSC rises past
-99.9\% and the K--S distance falls below $0.013$.
-Fig.~\ref{fig:mn16} shows the representative case $MN=16$, where the
-analytical Gamma is visually indistinguishable from the simulation in both
-the PDF and the CDF.
+\section{Numerical Results}
+A $5\times5\times3$~m room is simulated with $M=1$, $N=4$, $K=3$
+users, $b_\xi=0.036$, $\xi_{\max}=0.9574$ \cite{soltani2018},
+$B=20$~MHz, $P=3$~W, $R_{\mathrm{PD}}=0.4$~A/W, $\rho=0.95$, and
+$\kappa=20$ for the throughput study. UE-orientation randomness is drawn by
+accept--reject sampling of \eqref{eq:laplace}; all analytical curves are
+validated by Monte Carlo (MC) simulation.
 
 \begin{table}[t]
 \centering
-\caption{Gamma fit quality versus number of aggregated paths $MN$
-($N_{\mathrm{mc}}=10^{5}$).}
-\label{tab:sweep}
-\begin{tabular}{@{}rrrr@{}}
+\caption{Learned orientations after 6{,}000 stochastic interactions.}
+\label{tab:results}
+\begin{tabular}{lcccc}
 \toprule
-$MN$ & $k_g$ & BSC (\%) & $D_{\mathrm{KS}}$ \\
+Algorithm & $\gamma$ ($^\circ$) & $\omega$ ($^\circ$) &
+$\E[\mathrm{ADR}]$ (Mbit/s) & \% of ref. \\
 \midrule
-1  & 413.8    & 97.37 & 0.0827 \\
-2  & 827.6    & 98.94 & 0.0546 \\
-4  & 1655.3   & 99.41 & 0.0379 \\
-8  & 3310.6   & 99.67 & 0.0254 \\
-16 & 6621.1   & 99.83 & 0.0186 \\
-32 & 13242.2  & 99.90 & 0.0150 \\
-64 & 26484.4  & 99.94 & 0.0127 \\
+DDPG & $16.54$ & $-7.82$ & $36.94$ & $99.5$ \\
+SAC & $16.87$ & $-8.83$ & $37.11$ & $100.0$ \\
+PPO & $6.78$ & $-8.72$ & $22.33$ & $60.2$ \\
+CAPG & $8.30$ & $-7.48$ & $25.10$ & $67.6$ \\
+ECDPO & $16.92$ & $-8.37$ & $37.06$ & $99.8$ \\
+\midrule
+Grid reference & $16.54$ & $-8.77$ & $37.12$ & $100$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fit_good_MN16.png}
-\caption{Verification for $MN=16$
-($\mathrm{BSC}=99.83\%$, $D_{\mathrm{KS}}=0.0186$). The Gamma
-approximation is essentially exact once several paths are aggregated.}
-\label{fig:mn16}
+\includegraphics[width=0.98\columnwidth]{fig1_convergence.pdf}
+\caption{DRL convergence on the stochastic OIRS-VLC channel (moving average
+of the sampled mean ADR) versus the common-random-number grid reference.}
+\label{fig:conv}
 \end{figure}
 
-\subsection{Application: outage probability}
-The value of a closed-form CDF is that link-level metrics follow immediately.
-Consider an intensity-modulation/direct-detection receiver for which a target
-quality of service requires the aggregate gain to exceed a threshold
-$z_{\mathrm{th}}$ (equivalently, the received electrical SNR to exceed a
-target $\gamma_{\mathrm{th}}$, with $z_{\mathrm{th}}$ the corresponding gain).
-Using \eqref{eq:gammapdf}, the outage probability is obtained in closed form
-as
-\begin{equation}
-P_{\mathrm{out}}(z_{\mathrm{th}})
-=\Pr\{Z_k\le z_{\mathrm{th}}\}
-=F_{Z_k}(z_{\mathrm{th}})
-\approx\frac{\gamma\!\left(k_g,\,z_{\mathrm{th}}/\theta_g\right)}{\Gamma(k_g)} .
-\label{eq:outage}
-\end{equation}
-Because $k_g\propto MN$ while the per-path scale $\theta_g$ is fixed
-(Section~\ref{sec:gamma}), \eqref{eq:outage} makes the array-size dependence
-of the outage explicit: enlarging the OIRS increases $\mathbb{E}[Z_k]$
-linearly and concentrates the distribution, sharply reducing
-$P_{\mathrm{out}}$ for a fixed threshold. The same $F_{Z_k}$ can be fed to
-standard averaging integrals for the average bit-error rate, so the
-truncated-Laplace/Gamma pair reduces performance analysis to evaluations of
-the (widely tabulated) incomplete Gamma function rather than nested numerical
-integration over the incidence-angle statistics.
+\emph{Orientation optimization:} Table~\ref{tab:results} and
+Fig.~\ref{fig:conv} show that the off-policy agents (SAC, ECDPO, DDPG)
+recover the expected-ADR optimum to within $0.5$, with SAC's automatic
+temperature yielding the closest match. The on-policy agents (PPO, CAPG)
+settle on a shoulder of the multi-user landscape at this budget---a
+sample-efficiency gap consistent with their discard-after-update use of the
+noisy reward, not an algorithmic defect.
 
-\subsection{Model applicability}
-The truncated-Laplace assumption is appropriate when the incidence cosine is
-sharply concentrated about a nominal value---as it is for a fixed or
-slowly-moving receiver whose orientation varies within a limited FoV---and
-strictly bounded by geometry. When the receiver orientation spreads more
-uniformly over a wide FoV, a bounded-support model with a flatter body (e.g.\
-truncated-Gaussian or Beta) may fit the incidence statistics better; the
-moment-matching machinery of Section~\ref{sec:gamma} is agnostic to this
-choice, requiring only the first two moments of $\xi$. The closed forms
-\eqref{eq:Eu}--\eqref{eq:Eu2} are what make the truncated-Laplace instance
-especially convenient. Validating the truncated-Laplace assumption against
-ray-traced or measured incidence-angle histograms for a specific OIRS
-deployment is left as future work.
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\columnwidth]{fig4_outage.pdf}
+\caption{Outage probability vs.\ transmit SNR at the ECDPO-learned
+orientation ($R=2$, $\xi_{\min}=0.2$): analytical \eqref{eq:pout} vs.\
+MC markers. The truncated-Laplace model reaches any target outage at far
+lower SNR than the bounded uniform model and both hit the exact zero-outage
+cliff \eqref{eq:cliff} at $146$~dB, whereas the conventional
+$\xi_{\min}\!\to\!0$ uniform assumption exhibits no cliff.}
+\label{fig:outage}
+\end{figure}
 
-\subsection{Discussion}
-Two points are worth emphasising. First, the closed-form moments
-\eqref{eq:Eu}--\eqref{eq:Eu2} are exact and match simulation to three
-significant figures, so any residual mismatch in Figs.~\ref{fig:mn1}
-and~\ref{fig:mn16} is attributable solely to the Gamma \emph{shape}
-assumption, not to the moment computation. Second, because $k_g$ scales with
-$MN$ while $\theta_g$ does not, a designer can read off from
-Table~\ref{tab:sweep} the smallest array size for which the tractable Gamma
-model is trustworthy for a target accuracy---e.g.\ $D_{\mathrm{KS}}<0.02$ is
-reached by $MN\ge 16$. For very small arrays the model remains a useful but
-approximate summary; for the array sizes typical of practical OIRS panels it
-is effectively exact.
+\emph{Outage validation and cliff:} Fig.~\ref{fig:outage} confirms tight
+agreement between \eqref{eq:pout} and MC throughout the waterfall region. At
+$\bar{\gamma}_{\mathrm{cliff}}\!\approx\!146$~dB, given by \eqref{eq:cliff},
+the analytical and empirical outage drop \emph{exactly} to zero; the
+truncated-Laplace statistics reach $P_{out}{=}10^{-6}$ roughly $8$~dB before
+the bounded uniform model, quantifying the pessimism of uniform bounds, while
+the $\xi_{\min}\!\to\!0$ uniform tail never terminates.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\columnwidth]{fig3_fairness.pdf}
+\caption{Per-user expected ADR (left) and average HARQ-IR AoI (right) at the
+ADR-optimal vs.\ AoI-optimal learned orientations.}
+\label{fig:fair}
+\end{figure}
+
+\emph{Cross-layer fairness:} the throughput-optimal orientation abandons
+UE1 entirely ($\E[\mathrm{ADR}_1]=0$, worst-case AoI $4.5$ rounds),
+evidencing the unfairness of pure rate maximization. Retraining ECDPO with
+the min--max AoI reward on a wide-beam configuration ($\kappa=6$,
+$\bar{\gamma}=3\times10^{15}$) attains per-user AoI
+$[1.5,\,1.5,\,1.5]$---the theoretical minimum, with every user decoding in
+the first HARQ round---matching the min--max grid reference exactly
+(Fig.~\ref{fig:fair}).
 
 \section{Conclusion}
-We modelled the incidence cosine of an OIRS-assisted optical wireless link as
-a truncated-Laplace variable, derived its exact first and second moments in
-closed form, and obtained a moment-matched Gamma approximation of the
-aggregate channel gain with closed-form shape and scale. Monte~Carlo
-verification via the Bhattacharyya coefficient and the Kolmogorov--Smirnov
-distance confirms that the Gamma model is asymptotically tight in the number
-of aggregated paths, exceeding 99.9\% similarity for moderate
-array sizes. The closed-form CDF \eqref{eq:gammapdf} is directly usable in
-outage-probability and error-rate analysis, which we leave to future work
-together with the incorporation of the full path-loss expression for $a_k$
-and measurement-based validation of the truncated-Laplace assumption.
+This paper unified a rigorous outage analysis of OIRS-aided VLC under
+realistic truncated-Laplace UE orientation with a DRL-based optimization of
+the OIRS orientation itself. Exact moment matching yielded a tractable Gamma
+channel characterization and finite Meijer G-function outage expressions, and
+the physical FoV bound was proven to induce an exact zero-outage SNR cliff
+unreachable under conventional uniform assumptions. Framing the orientation
+design as stochastic expected-ADR maximization, off-policy DRL agents
+recovered the grid-search optimum to within $0.5$, and a min--max AoI
+reward variant restored fairness to misaligned users at the theoretical AoI
+minimum. These results establish OIRS-aided VLC links as substantially more
+deterministic and controllable than uniform bounds suggest, providing a
+foundation for URLLC-grade MAC design.
 
-\begin{thebibliography}{1}
-\bibitem{basar2019}
-E.~Basar, M.~Di~Renzo, J.~de~Rosny, M.~Debbah, M.-S.~Alouini, and R.~Zhang,
-``Wireless communications through reconfigurable intelligent surfaces,''
-\emph{IEEE Access}, vol.~7, pp.~116753--116773, 2019.
+\bibliographystyle{IEEEtran}
+\begin{thebibliography}{00}
 
-\bibitem{komine2004}
-T.~Komine and M.~Nakagawa,
-``Fundamental analysis for visible-light communication system using LED
-lights,'' \emph{IEEE Trans. Consum. Electron.}, vol.~50, no.~1,
-pp.~100--107, 2004.
+\bibitem{aboagye2023}
+S. Aboagye \emph{et al.}, ``RIS-assisted visible light communication systems:
+A tutorial,'' \emph{IEEE Commun. Surv. Tutor.}, vol. 25, no. 1, pp. 251--288,
+2023.
 
-\bibitem{papoulis2002}
-A.~Papoulis and S.~U.~Pillai, \emph{Probability, Random Variables, and
-Stochastic Processes}, 4th~ed. New York, NY, USA: McGraw-Hill, 2002.
+\bibitem{eroglu2018}
+Y. S. Ero\u{g}lu \emph{et al.}, ``Impact of random receiver orientation on
+visible light communications channel,'' \emph{IEEE Trans. Commun.}, vol. 67,
+no. 2, pp. 1313--1325, 2019.
 
-\bibitem{bhattacharyya1943}
-A.~Bhattacharyya, ``On a measure of divergence between two statistical
-populations defined by their probability distributions,''
-\emph{Bull. Calcutta Math. Soc.}, vol.~35, pp.~99--109, 1943.
+\bibitem{soltani2018}
+M. D. Soltani \emph{et al.}, ``Modeling the random orientation of mobile
+devices,'' \emph{IEEE Trans. Commun.}, vol. 67, no. 3, pp. 2157--2172, 2019.
+
+\bibitem{lillicrap2016}
+T. P. Lillicrap \emph{et al.}, ``Continuous control with deep reinforcement
+learning,'' in \emph{Proc. ICLR}, 2016.
+
+\bibitem{haarnoja2018}
+T. Haarnoja \emph{et al.}, ``Soft actor-critic: Off-policy maximum entropy
+deep reinforcement learning with a stochastic actor,'' in \emph{Proc. ICML},
+2018, pp. 1861--1870.
+
+\bibitem{schulman2017}
+J. Schulman \emph{et al.}, ``Proximal policy optimization algorithms,''
+\emph{arXiv:1707.06347}, 2017.
 
 \end{thebibliography}
 
