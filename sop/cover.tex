@@ -1,0 +1,350 @@
+%==============================================================================
+%  PREMIUM UNIVERSITY INTERNSHIP REPORT — COVER PAGE
+%  Engine : pdfLaTeX (Overleaf: set compiler to "pdfLaTeX")
+%  Passes : compile TWICE (TikZ "remember picture/overlay" needs two runs)
+%  Images : place logo1.png and logo2.png inside an "images/" folder
+%------------------------------------------------------------------------------
+%  Folder structure:
+%      project/
+%      ├── cover.tex
+%      └── images/
+%          ├── logo1.png   (CURAJ logo)
+%          └── logo2.png   (IIT Jodhpur logo)
+%==============================================================================
+\documentclass[a4paper,12pt]{article}
+
+%------------------------------- Page geometry --------------------------------
+\usepackage[a4paper,margin=1in]{geometry}
+
+%------------------------------- Fonts ----------------------------------------
+\usepackage[T1]{fontenc}
+\usepackage{tgpagella}   % TeX Gyre Pagella (elegant Palatino-style) for titles
+\usepackage{lmodern}     % Latin Modern as the default body face (loaded last)
+% Title font switch (TeX Gyre Pagella family = qpl):
+\newcommand{\titlefont}{\fontfamily{qpl}\selectfont}
+
+%------------------------------- Graphics & colour ----------------------------
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{eso-pic}     % full-page background layer
+\usepackage{calc}        % length arithmetic
+
+% tcolorbox (title panel with double border + drop shadow)
+\usepackage{tcolorbox}
+\tcbuselibrary{skins}
+
+% TikZ libraries used across the decorations
+\usetikzlibrary{calc,shapes.geometric,decorations.pathmorphing,fadings,arrows.meta}
+
+%------------------------------- Colour palette -------------------------------
+\definecolor{navy}{HTML}{0F2B5B}      % Primary navy
+\definecolor{royal}{HTML}{163C7A}     % Royal blue
+\definecolor{gold}{HTML}{C89B3C}      % Gold
+\definecolor{goldlite}{HTML}{E8D7A8}  % Light gold
+\definecolor{paper}{HTML}{FAF8F4}     % Background
+\definecolor{inktext}{HTML}{0F2B5B}   % Dark-navy text
+
+\pagecolor{paper}                     % light, elegant base — never dark
+
+%==============================================================================
+%  REUSABLE DECORATIVE MACROS
+%==============================================================================
+
+%------------------------------------------------------------------------------
+%  Corner ornament: an arc flourish + diamond + accent strokes.
+%  #1 = anchor coordinate, #2 = rotation (degrees)
+%------------------------------------------------------------------------------
+\newcommand{\cornerornament}[2]{%
+  \begin{scope}[shift={#1},rotate=#2]
+    % sweeping quarter arcs
+    \draw[gold,line width=1.3pt] (0,0.95) arc (90:0:0.95);
+    \draw[gold,line width=0.6pt] (0,0.72) arc (90:0:0.72);
+    % little diamond where the arcs meet the border
+    \fill[gold] (0.67,0.67) circle (0.055);
+    \fill[navy] (0.90,0.10) -- (1.05,0.25) -- (0.90,0.40) -- (0.75,0.25) -- cycle;
+    \fill[gold] (0.90,0.16) -- (0.99,0.25) -- (0.90,0.34) -- (0.81,0.25) -- cycle;
+    % short accent tails along the frame
+    \draw[gold,line width=0.9pt] (0,0)--(0,0.45);
+    \draw[gold,line width=0.9pt] (0,0)--(0.45,0);
+    \fill[gold] (0,0.55) circle (0.04);
+    \fill[gold] (0.55,0) circle (0.04);
+  \end{scope}}
+
+%------------------------------------------------------------------------------
+%  Golden astronomy icon: astrolabe / compass sunburst (drawn with TikZ).
+%------------------------------------------------------------------------------
+\newcommand{\astroicon}{%
+\begin{tikzpicture}[scale=0.80]
+  % outer sunburst rays
+  \foreach \a in {0,30,...,330}{\draw[gold,line width=0.7pt] (\a:1.20)--(\a:1.46);}
+  % graduated astrolabe rings
+  \draw[gold,line width=1.2pt] (0,0) circle (1.10);
+  \draw[gold,line width=0.5pt] (0,0) circle (0.94);
+  \foreach \a in {0,15,...,345}{\draw[gold,line width=0.5pt] (\a:0.94)--(\a:1.10);}
+  % eight-point compass star
+  \foreach \a in {0,90,180,270}{%
+    \fill[gold] (\a:0.88) -- (\a+18:0.26) -- (0,0) -- (\a-18:0.26) -- cycle;}
+  \foreach \a in {45,135,225,315}{%
+    \fill[goldlite] (\a:0.60) -- (\a+16:0.18) -- (0,0) -- (\a-16:0.18) -- cycle;}
+  % hub
+  \fill[navy] (0,0) circle (0.15);
+  \fill[gold] (0,0) circle (0.075);
+\end{tikzpicture}}
+
+%------------------------------------------------------------------------------
+%  Ornamental gold divider (rule + central diamond).
+%------------------------------------------------------------------------------
+\newcommand{\golddivider}{%
+\begin{tikzpicture}
+  \draw[gold,line width=1pt] (-3.6,0)--(-0.55,0);
+  \fill[gold] (-0.55,0) circle (0.045);
+  \fill[gold] (-0.30,0) -- (0,0.15) -- (0.30,0) -- (0,-0.15) -- cycle;
+  \fill[navy] (-0.13,0) -- (0,0.065) -- (0.13,0) -- (0,-0.065) -- cycle;
+  \fill[gold] (0.55,0) circle (0.045);
+  \draw[gold,line width=1pt] (0.55,0)--(3.6,0);
+\end{tikzpicture}}
+
+%------------------------------------------------------------------------------
+%  Small calendar icon for the date line.
+%------------------------------------------------------------------------------
+\newcommand{\calendaricon}{%
+\begin{tikzpicture}[scale=0.34,baseline=-0.35em]
+  \draw[navy,line width=1.1pt,rounded corners=2pt] (0,0) rectangle (1.7,1.5);
+  \fill[navy] (0,1.12) rectangle (1.7,1.5);
+  \draw[navy,line width=1.1pt] (0.4,1.5)--(0.4,1.85);
+  \draw[navy,line width=1.1pt] (1.3,1.5)--(1.3,1.85);
+  \foreach \x in {0.32,0.72,1.12}{\foreach \y in {0.3,0.68}{%
+      \fill[navy] (\x,\y) circle (0.07);}}
+\end{tikzpicture}}
+
+%------------------------------------------------------------------------------
+%  Logo loader: uses the real image if present, otherwise a neutral framed
+%  placeholder so the file always compiles. (Logos are never *drawn*.)
+%------------------------------------------------------------------------------
+\newcommand{\logoslot}[1]{%
+  \IfFileExists{#1}{\includegraphics[height=2.35cm]{#1}}{%
+    \begin{tikzpicture}
+      \node[draw=navy,line width=1pt,rounded corners=3pt,
+            minimum width=2.35cm,minimum height=2.35cm,align=center,
+            text=navy,font=\small]{logo\\image};
+    \end{tikzpicture}}}
+
+%==============================================================================
+%  FULL-PAGE DECORATIVE BACKGROUND  (all layers light: 3%–10% opacity)
+%==============================================================================
+\AddToShipoutPictureBG{%
+\begin{tikzpicture}[remember picture,overlay]
+
+  %--- base paper fill --------------------------------------------------------
+  \fill[paper] (current page.south west) rectangle (current page.north east);
+
+  %--- work in a page-local coordinate frame (A4 = 21cm x 29.7cm) ------------
+  \begin{scope}[shift={(current page.south west)}]
+
+    %=== soft radial glow behind the title (gentle, pale wash) ===============
+    \shade[inner color=goldlite,outer color=paper] (10.5,20.2) circle (9.2);
+
+    %=== soft corner vignette (very subtle darkening at the four corners) =====
+    \foreach \c in {(0,0),(21,0),(0,29.7),(21,29.7)}{%
+      \shade[inner color=navy!16,outer color=paper] \c circle (6.2);}
+    % restore paper base under content band so vignette stays faint
+    \shade[inner color=paper,outer color=paper,opacity=0.0] (10.5,15) circle (0.1);
+
+    %=== thin astronomy grid (clipped to inside the border) ==================
+    \begin{scope}[opacity=0.04]
+      \clip (1.4,1.4) rectangle (19.6,28.3);
+      \draw[navy,line width=0.2pt,step=0.9] (1.4,1.4) grid (19.6,28.3);
+    \end{scope}
+
+    %=== tiny glowing stars scattered across the page ========================
+    \pgfmathsetseed{2026}
+    \begin{scope}[opacity=0.10]
+      \foreach \i in {1,...,60}{%
+        \pgfmathsetmacro{\sx}{rnd*21}
+        \pgfmathsetmacro{\sy}{rnd*29.7}
+        \pgfmathsetmacro{\sr}{0.018+rnd*0.045}
+        \fill[gold,opacity=0.45] (\sx,\sy) circle (\sr*2.4); % faint glow halo
+        \fill[navy] (\sx,\sy) circle (\sr);                  % star core
+      }
+    \end{scope}
+
+    %=== faint constellation (top-left) ======================================
+    \begin{scope}[opacity=0.09,navy]
+      \coordinate (k1) at (2.6,26.4);
+      \coordinate (k2) at (3.9,27.2);
+      \coordinate (k3) at (5.1,26.5);
+      \coordinate (k4) at (6.2,27.1);
+      \coordinate (k5) at (4.6,25.3);
+      \coordinate (k6) at (3.2,25.0);
+      \draw[line width=0.5pt] (k1)--(k2)--(k3)--(k4);
+      \draw[line width=0.5pt] (k3)--(k5)--(k6);
+      \foreach \p in {k1,k2,k3,k4,k5,k6}{\fill (\p) circle (0.06);}
+    \end{scope}
+
+    %=== subtle galaxy swirl (top-right) =====================================
+    \begin{scope}[shift={(17.6,25.6)},opacity=0.07,gold]
+      % two logarithmic-style spiral arms (angle in degrees)
+      \draw[line width=0.7pt,samples=180,smooth,variable=\t,domain=0:900]
+        plot ({0.0028*\t*cos(\t)},{0.0028*\t*sin(\t)});
+      \draw[line width=0.7pt,samples=180,smooth,variable=\t,domain=0:900]
+        plot ({0.0028*\t*cos(\t+180)},{0.0028*\t*sin(\t+180)});
+      \fill (0,0) circle (0.14);
+      \fill[opacity=0.5] (0,0) circle (0.30);
+    \end{scope}
+
+    %=== scientific hexagon (molecular) pattern (lower-left) =================
+    \begin{scope}[opacity=0.05,navy]
+      \foreach \row in {0,1,2,3}{%
+        \foreach \col in {0,1,2,3}{%
+          \pgfmathsetmacro{\hx}{1.9 + \col*1.28 + mod(\row,2)*0.64}
+          \pgfmathsetmacro{\hy}{2.0 + \row*1.11}
+          \node[regular polygon,regular polygon sides=6,minimum size=1.34cm,
+                draw=navy,line width=0.5pt,rotate=30] at (\hx,\hy) {};
+          \fill[navy] (\hx,\hy) circle (0.04);
+        }}
+    \end{scope}
+
+    %=== elegant flowing golden curves in the bottom corners =================
+    \begin{scope}[opacity=0.08,gold,line width=1pt]
+      % bottom-left
+      \draw (1.4,1.4) .. controls (4.5,2.2) and (2.2,5.0) .. (1.4,7.5);
+      \draw (1.4,1.4) .. controls (5.6,2.6) and (3.4,5.8) .. (2.6,8.6);
+      % bottom-right
+      \draw (19.6,1.4) .. controls (16.5,2.2) and (18.8,5.0) .. (19.6,7.5);
+      \draw (19.6,1.4) .. controls (15.4,2.6) and (17.6,5.8) .. (18.4,8.6);
+    \end{scope}
+
+    %=== very light IIT-Jodhpur-style building silhouette (lower-right) ======
+    \begin{scope}[shift={(13.8,1.55)},opacity=0.10,navy]
+      % ground line
+      \draw[line width=1pt] (-0.4,0)--(6.4,0);
+      % left wing
+      \fill (0.0,0) rectangle (1.3,1.5);
+      % central hall with stepped facade
+      \fill (1.5,0) rectangle (4.4,2.2);
+      \fill (2.1,2.2) rectangle (3.8,2.7);
+      % dome + finial on the central hall
+      \fill (2.55,2.7) rectangle (3.35,3.0);
+      \draw[line width=1pt] (2.55,3.0) arc (180:0:0.40);
+      \fill (2.55,3.0) arc (180:0:0.40) -- cycle;
+      \draw[line width=1pt] (2.95,3.4)--(2.95,3.75);
+      \fill (2.95,3.75) circle (0.07);
+      % right wing + tower
+      \fill (4.6,0) rectangle (5.9,1.5);
+      \fill (5.4,1.5) rectangle (5.9,2.4);
+      % window rhythm (thin gaps carved as paper-coloured slots)
+      \foreach \wx in {1.7,2.05,2.4,2.75,3.1,3.45,3.8,4.15}{%
+        \fill[paper] (\wx,0.35) rectangle (\wx+0.14,1.7);}
+      \foreach \wx in {0.2,0.55,0.9}{%
+        \fill[paper] (\wx,0.35) rectangle (\wx+0.12,1.15);}
+      \foreach \wx in {4.8,5.15,5.5}{%
+        \fill[paper] (\wx,0.35) rectangle (\wx+0.12,1.15);}
+    \end{scope}
+
+  \end{scope} % end page-local frame
+
+  %=== ELEGANT DOUBLE BORDER ================================================
+  \draw[navy,line width=4pt]
+    ([shift={( 0.90,  0.90)}]current page.south west)
+    rectangle
+    ([shift={(-0.90, -0.90)}]current page.north east);
+  \draw[gold,line width=2pt]
+    ([shift={( 1.15,  1.15)}]current page.south west)
+    rectangle
+    ([shift={(-1.15, -1.15)}]current page.north east);
+
+  %=== CORNER ORNAMENTS (on the inner gold frame) ===========================
+  \cornerornament{([shift={( 1.15,  1.15)}]current page.south west)}{0}
+  \cornerornament{([shift={(-1.15,  1.15)}]current page.south east)}{90}
+  \cornerornament{([shift={(-1.15, -1.15)}]current page.north east)}{180}
+  \cornerornament{([shift={( 1.15, -1.15)}]current page.north west)}{270}
+
+\end{tikzpicture}}
+
+%==============================================================================
+%  DOCUMENT BODY
+%==============================================================================
+\begin{document}
+\thispagestyle{empty}
+\centering
+\color{inktext}
+
+\vspace*{0.02cm}
+
+%------------------------------- Top logos ------------------------------------
+\begin{tabular}{@{}c@{\hspace{1.6cm}}c@{}}
+  \logoslot{images/logo1.png} & \logoslot{images/logo2.png}
+\end{tabular}
+
+\vspace{0.26cm}
+
+%------------------------------- Host institution -----------------------------
+{\itshape\large Internship carried out at}\\[0.14cm]
+{\titlefont\bfseries\Large\color{navy} Indian Institute of Technology Jodhpur}
+
+\vspace{0.20cm}
+\golddivider
+
+\vspace{0.28cm}
+
+%------------------------------- Report heading -------------------------------
+{\titlefont\bfseries\Large\color{navy} INTERNSHIP REPORT}\\[0.12cm]
+{\itshape\large on}
+
+\vspace{0.20cm}
+
+%------------------------------- Astronomy icon -------------------------------
+\astroicon
+
+\vspace{0.16cm}
+
+%------------------------------- Main title panel -----------------------------
+\begin{tcolorbox}[
+  enhanced,
+  width=0.82\linewidth,
+  halign=center,
+  colback=navy,
+  colframe=gold,
+  boxrule=2pt,
+  arc=9pt,
+  auto outer arc,
+  drop fuzzy shadow=black!45,          % soft drop shadow
+  borderline={0.7pt}{3.2pt}{goldlite}, % inner gold keyline -> double border
+  left=16pt,right=16pt,top=13pt,bottom=12pt
+]
+  {\titlefont\bfseries\LARGE\color{gold} Gamma-Ray Emission Model}\\[3pt]
+  {\titlefont\bfseries\LARGE\color{gold} for}\\[3pt]
+  {\titlefont\bfseries\LARGE\color{gold} Astrophysical Radiation Analysis}\\[9pt]
+  {\titlefont\large\scshape\color{white} (GAMERA)}
+\end{tcolorbox}
+
+\vspace{0.30cm}
+\golddivider
+\vspace{0.26cm}
+
+%------------------------------- Author section -------------------------------
+{\itshape\large Submitted by}\\[0.14cm]
+{\titlefont\bfseries\huge\color{navy} Palak Joya}\\[0.16cm]
+{\large M.Sc.\ B.Ed.\ (Innovative) Physics}\\[0.04cm]
+{\normalsize Enrolment No.: 2025MSBPH018}\\[0.04cm]
+{\normalsize School of Physical Sciences}\\[0.05cm]
+{\titlefont\bfseries\large\color{navy} Central University of Rajasthan}
+
+\vspace{0.30cm}
+
+%------------------------------- Supervisor section ---------------------------
+{\itshape\large Under the Supervision of}\\[0.14cm]
+{\titlefont\bfseries\LARGE\color{navy} Dr.\ Reetanjali Moharana}\\[0.12cm]
+{\large Associate Professor}\\[0.04cm]
+{\large Department of Physics}\\[0.05cm]
+{\titlefont\bfseries\large\color{navy} Indian Institute of Technology Jodhpur}
+
+\vfill
+
+%------------------------------- Date -----------------------------------------
+{\color{gold}\rule{0.66\linewidth}{1pt}}\\[0.26cm]
+\calendaricon\;\; {\large Date of Submission:\; \textbf{\color{navy}July 20, 2026}}
+
+\vspace{0.18cm}
+\end{document}
