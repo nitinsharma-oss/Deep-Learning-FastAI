@@ -8,6 +8,8 @@
 \usepackage{xcolor}
 \usepackage{mathtools}
 \usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
 
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
 T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
@@ -167,7 +169,46 @@ k_{g_k} = MN\frac{\E[\xi]^2}{\mathrm{Var}[\xi]}, \qquad
 \label{eq:matching}
 \end{equation}
 
+Equations \eqref{eq:gamma}--\eqref{eq:matching} fully characterize the NLoS
+gain statistics. The probability density function (PDF) $f_{Z_k}(z)$ in
+\eqref{eq:gamma} describes how the instantaneous NLoS gain is distributed
+about its mean, while the corresponding cumulative distribution function
+(CDF) is obtained by integrating the PDF over the physically bounded support,
+\begin{equation}
+F_{Z_k}(z)=\Pr\{Z_k\le z\}
+=\frac{1}{\Gamma(k_{g_k})}\,\gamma\!\left(k_{g_k},\frac{z}{\theta_{g_k}}\right),
+\quad z\ge L_B,
+\label{eq:cdf}
+\end{equation}
+where $\gamma(\cdot,\cdot)$ is the lower incomplete gamma function. The PDF
+captures the concentration and skew of the fading, whereas the CDF maps
+directly to reliability metrics: the outage probability of
+Section~\ref{sec:outage} is precisely the CDF evaluated over the outage
+region. Both functions are verified against Monte~Carlo simulation in
+Figs.~\ref{fig:pdf} and~\ref{fig:cdf}; the close agreement across the entire
+bounded support confirms that exact moment matching is sufficient to
+reproduce the true multi-element gain law without an $MN$-fold convolution.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\columnwidth]{fig_pdf_verification.pdf}
+\caption{PDF of the equivalent NLoS channel gain $Z_k$: analytical
+moment-matched Gamma \eqref{eq:gamma} versus Monte~Carlo histogram over the
+bounded support $[L_B,\,MNa_k\xi_{\max}]$.}
+\label{fig:pdf}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\columnwidth]{fig_cdf_verification.pdf}
+\caption{CDF of the equivalent NLoS channel gain $Z_k$: analytical
+\eqref{eq:cdf} versus the empirical Monte~Carlo CDF, showing agreement from
+the physical lower bound $L_B$ upward.}
+\label{fig:cdf}
+\end{figure}
+
 \section{Outage Analysis and the Zero-Outage Cliff}
+\label{sec:outage}
 For IM/DD OOK signaling with target rate $R$, the instantaneous electrical
 SNR is $\gamma_k=|Z_k|^2\bar{\gamma}$ and an outage occurs when $Z_k$ falls
 below
@@ -240,6 +281,66 @@ critic loss, and exponentially decaying exploration noise
 replaces the ADR objective with the cross-layer min--max HARQ-IR AoI
 objective $\min_{\gamma,\omega}\max_k \bar{\Delta}_{k,\mathrm{IR}}$,
 computed in closed form via \eqref{eq:matching} and the Gamma CDF.
+
+\subsection{ECDPO: A Hybrid Off-Policy Algorithm}
+\label{sec:ecdpo}
+The proposed ECDPO is a \emph{hybrid} off-policy learner: it fuses the
+deterministic policy-gradient actor of DDPG---well suited to the low
+two-dimensional continuous action $\mathbf a=[\gamma,\omega]$---with the
+robustness mechanisms that stabilize value learning under the highly noisy,
+orientation-averaged reward of \eqref{eq:p1}. Three ingredients are inherited
+from clipped-value/delayed-update actor-critic design and one is specific to
+the stochastic-reward setting here:
+\begin{itemize}
+\item \textbf{Twin critics with a minimum operator.} Two critics
+$Q_{\theta_1},Q_{\theta_2}$ are trained and the smaller of the two is used
+for the actor target, suppressing the value overestimation that the noisy
+sampled ADR would otherwise amplify.
+\item \textbf{Delayed actor updates.} The actor and target networks are
+updated once every $d$ critic updates, so the policy is improved only against
+a value estimate that has partially averaged out reward noise.
+\item \textbf{Huber critic loss.} Regressing the critics under a Huber
+(smooth-$\ell_1$) loss bounds the influence of the occasional large reward
+outliers produced by unfavourable orientation draws.
+\item \textbf{Scheduled exploration anneal.} The exploration standard
+deviation decays $0.5\!\to\!0.05$ over training, giving coarse global search
+early and fine local alignment near the optimum---the coarse-to-fine
+behaviour visible in Fig.~\ref{fig:conv}.
+\end{itemize}
+Because each episode is single-step (the state is the fixed, normalized
+geometry and one action yields one fresh reward draw), no temporal
+bootstrapping is required and the critic target reduces to the immediate
+stochastic reward $r$; the twin-critic minimum and delayed updates therefore
+act purely as variance-control on the \emph{expected}-ADR surface. The
+training loop is summarized in Algorithm~\ref{alg:ecdpo}. The AoI-fairness
+variant reuses the identical skeleton, replacing the reward in line~4 with
+$-\max_k \bar{\Delta}_{k,\mathrm{IR}}$ evaluated in closed form through
+\eqref{eq:cdf}.
+
+\begin{algorithm}[t]
+\caption{ECDPO for OIRS orientation optimization}
+\label{alg:ecdpo}
+\begin{algorithmic}[1]
+\State Initialize actor $\mu_\phi$, twin critics $Q_{\theta_1},Q_{\theta_2}$,
+targets, replay buffer $\mathcal{B}$, noise $\sigma\!\leftarrow\!0.5$
+\State Fix state $s$ (normalized room/OIRS geometry)
+\For{$t=1$ \textbf{to} $T$}
+  \State $\mathbf a\!\leftarrow\!\mathrm{clip}\bigl(\mu_\phi(s)+\epsilon\bigr)$,
+         $\epsilon\!\sim\!\mathcal{N}(0,\sigma^2)$, to $[-\tfrac{\pi}{2},\tfrac{\pi}{2}]^2$
+  \State Draw fresh $\{\xi\}$; compute reward $r$ (sampled mean ADR of \eqref{eq:p1})
+  \State Store $(s,\mathbf a,r)$ in $\mathcal{B}$; sample a minibatch
+  \State Target $y\!\leftarrow\!r$ \Comment{single-step: no bootstrap}
+  \State Update $\theta_1,\theta_2$ by Huber loss on $Q_{\theta_j}(s,\mathbf a)-y$
+  \If{$t \bmod d = 0$}
+    \State Update $\phi$ by ascending
+           $\nabla_\phi \min_{j}Q_{\theta_j}\bigl(s,\mu_\phi(s)\bigr)$
+    \State Soft-update target networks
+  \EndIf
+  \State Anneal $\sigma$ toward $0.05$
+\EndFor
+\State \Return $\mu_\phi(s)=[\gamma^\star,\omega^\star]$
+\end{algorithmic}
+\end{algorithm}
 
 \section{Numerical Results}
 A $5\times5\times3$~m room is simulated with $M=1$, $N=4$, $K=3$
