@@ -25,6 +25,9 @@
 
 %------------------------------- Graphics & colour ----------------------------
 \usepackage{graphicx}
+% Search for images both in an "images/" subfolder AND in the project root,
+% so the logos are found wherever you placed them in the file tree.
+\graphicspath{{images/}{./}}
 \usepackage{xcolor}
 \usepackage{tikz}
 \usepackage{eso-pic}     % full-page background layer
@@ -119,16 +122,21 @@
 \end{tikzpicture}}
 
 %------------------------------------------------------------------------------
-%  Logo loader: uses the real image if present, otherwise a neutral framed
-%  placeholder so the file always compiles. (Logos are never *drawn*.)
+%  Logo loader: looks for the file in images/ first, then in the project root,
+%  and only falls back to a neutral framed placeholder if neither exists — so
+%  the file always compiles. Pass the bare file name, e.g. \logoslot{logo1.png}.
+%  (Logos are never *drawn*.)
 %------------------------------------------------------------------------------
 \newcommand{\logoslot}[1]{%
-  \IfFileExists{#1}{\includegraphics[height=2.35cm]{#1}}{%
-    \begin{tikzpicture}
-      \node[draw=navy,line width=1pt,rounded corners=3pt,
-            minimum width=2.35cm,minimum height=2.35cm,align=center,
-            text=navy,font=\small]{logo\\image};
-    \end{tikzpicture}}}
+  \IfFileExists{images/#1}%
+    {\includegraphics[height=2.35cm]{images/#1}}%
+    {\IfFileExists{#1}%
+      {\includegraphics[height=2.35cm]{#1}}%
+      {\begin{tikzpicture}
+         \node[draw=navy,line width=1pt,rounded corners=3pt,
+               minimum width=2.35cm,minimum height=2.35cm,align=center,
+               text=navy,font=\small]{logo\\image};
+       \end{tikzpicture}}}}
 
 %==============================================================================
 %  FULL-PAGE DECORATIVE BACKGROUND  (all layers light: 3%–10% opacity)
@@ -274,7 +282,7 @@
 
 %------------------------------- Top logos ------------------------------------
 \begin{tabular}{@{}c@{\hspace{1.6cm}}c@{}}
-  \logoslot{images/logo1.png} & \logoslot{images/logo2.png}
+  \logoslot{logo1.png} & \logoslot{logo2.png}
 \end{tabular}
 
 \vspace{0.26cm}
