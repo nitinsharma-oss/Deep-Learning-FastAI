@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NFC Digital Identity Platform — System Design</title>
+<style>
+  :root{
+    --ink:#1B1D22; --ink-2:#4a4e57; --ink-3:#7a7f88;
+    --line:#E4E2DA; --line-2:#d0cec5;
+    --page:#FCFCFA; --card:#FFFFFF;
+    --accent:#3A3F73;            /* slate-indigo structural accent */
+    --coral:#D85A30; --coral-bg:#FAECE7; --coral-ink:#7a3016;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--page); color:var(--ink);
+    font-family:var(--sans); font-size:16px; line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px; margin:0 auto; padding:0 24px 96px;}
+
+  /* ---- masthead ---- */
+  header.mast{padding:56px 0 28px; border-bottom:2px solid var(--ink);}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.08em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 14px;}
+  h1{font-size:34px; line-height:1.15; font-weight:650; letter-spacing:-.015em; margin:0 0 12px;}
+  .lede{font-size:18px; color:var(--ink-2); margin:0; max-width:60ch;}
+  .meta{display:flex; flex-wrap:wrap; gap:6px 28px; margin-top:22px;
+    font-family:var(--mono); font-size:12px; color:var(--ink-3);}
+  .meta b{color:var(--ink-2); font-weight:500;}
+
+  /* ---- sections ---- */
+  section{padding:44px 0 8px; border-bottom:1px solid var(--line);}
+  .sec-head{display:flex; align-items:baseline; gap:16px; margin:0 0 6px;}
+  .sec-no{font-family:var(--mono); font-size:13px; color:var(--accent);
+    letter-spacing:.04em; padding-top:4px;}
+  h2{font-size:23px; font-weight:600; letter-spacing:-.01em; margin:0;}
+  h3{font-size:16px; font-weight:600; margin:26px 0 4px; letter-spacing:.005em;}
+  p{margin:14px 0; max-width:70ch;}
+  code{font-family:var(--mono); font-size:.86em; background:#F2F0EA;
+    padding:1px 5px; border-radius:4px; color:var(--coral-ink);}
+
+  /* ---- figures ---- */
+  figure{margin:30px 0 8px; padding:22px 20px 12px; background:var(--card);
+    border:1px solid var(--line); border-radius:12px;}
+  figure svg{display:block; width:100%; height:auto;}
+  figcaption{font-family:var(--mono); font-size:12px; color:var(--ink-3);
+    margin-top:14px; padding-top:12px; border-top:1px solid var(--line);
+    display:flex; gap:8px; align-items:baseline;}
+  figcaption .fno{color:var(--accent);}
+  .tick{display:inline-block; width:9px; height:9px; border-radius:2px;
+    background:var(--coral-bg); border:1px solid var(--coral); flex:0 0 auto; transform:translateY(1px);}
+
+  /* ---- svg text/color classes (self-contained) ---- */
+  .fig-t{font-family:var(--sans); font-size:14px; fill:var(--ink);}
+  .fig-ts{font-family:var(--sans); font-size:12px; fill:var(--ink-2);}
+  .fig-th{font-family:var(--sans); font-size:14px; font-weight:500; fill:var(--ink);}
+  .fig-arr{fill:none; stroke:#8a8f98; stroke-width:1.5;}
+  .fig-leader{stroke:#b9bcc2; stroke-width:.6; stroke-dasharray:3 3;}
+  .c-gray rect,  rect.c-gray {fill:#F1EFE8; stroke:#B4B2A9;}
+  .c-teal rect,  rect.c-teal {fill:#E1F5EE; stroke:#1D9E75;}
+  .c-blue rect,  rect.c-blue {fill:#E6F1FB; stroke:#378ADD;}
+  .c-coral rect, rect.c-coral{fill:var(--coral-bg); stroke:var(--coral);}
+  .c-amber rect, rect.c-amber{fill:#FAEEDA; stroke:#EF9F27;}
+  .c-red rect,   rect.c-red  {fill:#FCEBEB; stroke:#E24B4A;}
+
+  /* ---- ERD entity cards ---- */
+  .erd{display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin:26px 0 10px;}
+  .ent{border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--card);}
+  .ent.core{border-color:var(--coral);}
+  .ent h4{margin:0; font-family:var(--mono); font-size:13px; letter-spacing:.03em;
+    padding:9px 14px; background:#F5F3ED; border-bottom:1px solid var(--line); font-weight:600;}
+  .ent.core h4{background:var(--coral-bg); color:var(--coral-ink); border-bottom-color:var(--coral);}
+  .ent table{width:100%; border-collapse:collapse; font-size:13.5px;}
+  .ent td{padding:6px 14px; border-top:1px solid var(--line);}
+  .ent tr:first-child td{border-top:0;}
+  .ent .fname{font-family:var(--mono); color:var(--ink);}
+  .ent .ftype{font-family:var(--mono); color:var(--ink-3); text-align:right; white-space:nowrap;}
+  .key{font-family:var(--mono); font-size:10px; font-weight:600; letter-spacing:.05em;
+    padding:1px 5px; border-radius:4px; margin-left:7px; vertical-align:middle;}
+  .key.pk{background:#E9E7F5; color:#3A3F73;}
+  .key.fk{background:#E1F5EE; color:#0f6e56;}
+  .key.uk{background:#FAEEDA; color:#854f0b;}
+
+  .rels{margin:22px 0 6px; padding:0; list-style:none; font-size:15px;}
+  .rels li{padding:7px 0 7px 0; border-top:1px solid var(--line);}
+  .rels li:first-child{border-top:0;}
+  .rels code{background:#F2F0EA; color:var(--accent);}
+  .rels .card{font-family:var(--mono); color:var(--ink-3); font-size:12px;}
+
+  /* decision list */
+  .dl{margin:8px 0;}
+  .dl h3{border-left:2px solid var(--coral); padding-left:12px; margin-left:-14px;}
+
+  footer{padding:34px 0 0; font-family:var(--mono); font-size:12px; color:var(--ink-3);}
+
+  @media (max-width:640px){
+    h1{font-size:27px;} .erd{grid-template-columns:1fr;} .lede{font-size:16px;}
+    .sec-head{flex-direction:column; gap:2px;} .dl h3{margin-left:0;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <p class="eyebrow">System design · architecture reference</p>
+  <h1>Secure NFC Digital Identity Platform</h1>
+  <p class="lede">A subscription platform where each NFC card carries only an opaque token, and ownership is enforced entirely in the backend — so rewriting the chip changes nothing.</p>
+  <div class="meta">
+    <span><b>Doc</b> architecture &amp; data model</span>
+    <span><b>Status</b> design draft</span>
+    <span><b>Scope</b> registry, resolver, lifecycle, schema</span>
+  </div>
+</header>
+
+<section>
+  <div class="sec-head"><span class="sec-no">§01</span><h2>The core idea</h2></div>
+  <p>Security does not live on the NFC chip. It lives in the backend registry. The card only ever holds an <em>opaque, non-enumerable token</em> — never personal data. When tapped, the card opens a URL; the platform resolves that token to a cloud-hosted profile.</p>
+  <p>Because ownership is a server-side record keyed on the token, an attacker who rewrites a chip can change what one physical card points to, but cannot move ownership or hijack anyone's profile. The rewrite is <em>inert</em>. Locking the tag to read-only (where the chip supports permanent lock bits) closes even that gap. The real, defensible guarantee is not "the chip can't be rewritten" — it's "rewriting the chip does nothing the platform respects."</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">§02</span><h2>System architecture</h2></div>
+  <p>The system is a three-layer stack. Everything except one box is standard web infrastructure; the highlighted <span style="color:var(--coral-ink)">ownership registry</span> is the part a generic NFC card doesn't have.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 490" role="img" aria-labelledby="f1t f1d">
+      <title id="f1t">Three-layer platform architecture</title>
+      <desc id="f1d">Client, application, and data layers stacked vertically, with the ownership registry highlighted as the security core.</desc>
+      <defs>
+        <marker id="arw" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+      </defs>
+
+      <rect x="40" y="40" width="600" height="94" rx="16" fill="none" stroke="#c9c7bd" stroke-width="0.7" stroke-dasharray="4 4"/>
+      <text class="fig-ts" x="56" y="62">Client layer</text>
+      <g class="c-gray"><rect x="70" y="74" width="150" height="44" rx="8" stroke-width="0.7"/><text class="fig-th" x="145" y="90" text-anchor="middle" dominant-baseline="central">NFC card</text><text class="fig-ts" x="145" y="106" text-anchor="middle" dominant-baseline="central">opaque token</text></g>
+      <g class="c-gray"><rect x="250" y="74" width="150" height="44" rx="8" stroke-width="0.7"/><text class="fig-th" x="325" y="90" text-anchor="middle" dominant-baseline="central">Visitor browser</text><text class="fig-ts" x="325" y="106" text-anchor="middle" dominant-baseline="central">tap opens URL</text></g>
+      <g class="c-gray"><rect x="440" y="74" width="180" height="44" rx="8" stroke-width="0.7"/><text class="fig-th" x="530" y="90" text-anchor="middle" dominant-baseline="central">Owner / admin</text><text class="fig-ts" x="530" y="106" text-anchor="middle" dominant-baseline="central">edit, manage</text></g>
+
+      <line x1="340" y1="134" x2="340" y2="168" class="fig-arr" marker-end="url(#arw)"/>
+
+      <rect x="40" y="172" width="600" height="112" rx="16" fill="none" stroke="#c9c7bd" stroke-width="0.7" stroke-dasharray="4 4"/>
+      <text class="fig-ts" x="56" y="192">Application layer</text>
+      <g class="c-teal"><rect x="60" y="206" width="128" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="124" y="226" text-anchor="middle" dominant-baseline="central">Resolver</text><text class="fig-ts" x="124" y="244" text-anchor="middle" dominant-baseline="central">tap hot path</text></g>
+      <g class="c-blue"><rect x="204" y="206" width="128" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="268" y="226" text-anchor="middle" dominant-baseline="central">Auth + OTP</text><text class="fig-ts" x="268" y="244" text-anchor="middle" dominant-baseline="central">profile login</text></g>
+      <g class="c-blue"><rect x="348" y="206" width="128" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="412" y="226" text-anchor="middle" dominant-baseline="central">Profiles</text><text class="fig-ts" x="412" y="244" text-anchor="middle" dominant-baseline="central">CRUD content</text></g>
+      <g class="c-coral"><rect x="492" y="206" width="128" height="56" rx="8" stroke-width="1"/><text class="fig-th" x="556" y="226" text-anchor="middle" dominant-baseline="central">Ownership</text><text class="fig-ts" x="556" y="244" text-anchor="middle" dominant-baseline="central">admin control</text></g>
+
+      <line x1="340" y1="284" x2="340" y2="318" class="fig-arr" marker-end="url(#arw)"/>
+
+      <rect x="40" y="322" width="600" height="112" rx="16" fill="none" stroke="#c9c7bd" stroke-width="0.7" stroke-dasharray="4 4"/>
+      <text class="fig-ts" x="56" y="342">Data layer</text>
+      <g class="c-coral"><rect x="60" y="356" width="180" height="56" rx="8" stroke-width="1.6"/><text class="fig-th" x="150" y="376" text-anchor="middle" dominant-baseline="central">Ownership registry</text><text class="fig-ts" x="150" y="394" text-anchor="middle" dominant-baseline="central">token to account</text></g>
+      <g class="c-blue"><rect x="256" y="356" width="180" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="346" y="376" text-anchor="middle" dominant-baseline="central">Profile store</text><text class="fig-ts" x="346" y="394" text-anchor="middle" dominant-baseline="central">content, assets</text></g>
+      <g class="c-gray"><rect x="452" y="356" width="168" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="536" y="376" text-anchor="middle" dominant-baseline="central">Cache + analytics</text><text class="fig-ts" x="536" y="394" text-anchor="middle" dominant-baseline="central">Redis, events</text></g>
+
+      <rect x="60" y="452" width="12" height="12" rx="3" class="c-coral" stroke-width="0.7"/>
+      <text class="fig-ts" x="80" y="462">Security core — the part a generic NFC card doesn't have</text>
+    </svg>
+    <figcaption><span class="fno">Fig 1</span><span>Three-layer architecture. Read path (resolver) scales independently of write paths (auth, profiles, ownership).</span></figcaption>
+  </figure>
+
+  <h3>Client layer</h3>
+  <p>The visitor needs no app — tapping opens a URL in whatever browser the phone already has, which is why the card stores only a token. The owner and admin reach a real authenticated dashboard.</p>
+  <h3>Application layer</h3>
+  <p>Two paths that scale independently. The resolver is the read-only hot path on every tap: fast, cacheable, stateless. Auth, profile editing, and ownership control are lower-traffic, higher-security write paths. A viral card getting 50,000 taps never slows editing and never touches the ownership-write machinery.</p>
+  <h3>Data layer</h3>
+  <p>Where the product lives. The ownership registry holds the authoritative <code>token → account</code> binding — the single source of truth that makes rewriting a chip pointless. Large assets (resumes, portfolio images) sit in object storage, not the database. The cache/analytics store absorbs the tap-event firehose asynchronously so logging never blocks a redirect.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">§03</span><h2>Card ownership lifecycle</h2></div>
+  <p>This state machine <em>is</em> the security model. Ownership only ever changes through admin approval, and an unauthorized rewrite produces no transition at all.</p>
+
+  <figure>
+    <svg viewBox="0 0 680 430" role="img" aria-labelledby="f2t f2d">
+      <title id="f2t">Card ownership lifecycle</title>
+      <desc id="f2d">States from provisioned to active, with transfer, lost-card, and unauthorized-rewrite paths. Ownership changes only through admin approval.</desc>
+      <defs>
+        <marker id="arw2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+      </defs>
+
+      <g class="c-gray"><rect x="60" y="40" width="180" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="150" y="60" text-anchor="middle" dominant-baseline="central">Provisioned</text><text class="fig-ts" x="150" y="78" text-anchor="middle" dominant-baseline="central">token written, unowned</text></g>
+      <line x1="240" y1="68" x2="298" y2="68" class="fig-arr" marker-end="url(#arw2)"/>
+      <text class="fig-ts" x="269" y="58" text-anchor="middle">activate</text>
+      <g class="c-teal"><rect x="300" y="40" width="180" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="390" y="60" text-anchor="middle" dominant-baseline="central">Active</text><text class="fig-ts" x="390" y="78" text-anchor="middle" dominant-baseline="central">bound to account</text></g>
+
+      <line x1="390" y1="96" x2="390" y2="150" class="fig-arr" marker-end="url(#arw2)"/>
+      <text class="fig-ts" x="500" y="126" text-anchor="middle">owner reports lost</text>
+      <g class="c-amber"><rect x="300" y="152" width="180" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="390" y="172" text-anchor="middle" dominant-baseline="central">Revoked</text><text class="fig-ts" x="390" y="190" text-anchor="middle" dominant-baseline="central">old token dead</text></g>
+
+      <line x1="300" y1="180" x2="242" y2="180" class="fig-arr" marker-end="url(#arw2)"/>
+      <text class="fig-ts" x="150" y="170" text-anchor="middle">reissue, same profile</text>
+      <g class="c-gray"><rect x="60" y="152" width="180" height="56" rx="8" stroke-width="0.7"/><text class="fig-th" x="150" y="172" text-anchor="middle" dominant-baseline="central">New card provisioned</text><text class="fig-ts" x="150" y="190" text-anchor="middle" dominant-baseline="central">fresh token</text></g>
+      <line x1="150" y1="152" x2="150" y2="98" class="fig-arr" marker-end="url(#arw2)"/>
+
+      <line x1="390" y1="208" x2="390" y2="262" class="fig-arr" marker-end="url(#arw2)"/>
+      <text class="fig-ts" x="500" y="238" text-anchor="middle">transfer requested</text>
+      <g class="c-coral"><rect x="300" y="264" width="180" height="56" rx="8" stroke-width="1.6"/><text class="fig-th" x="390" y="284" text-anchor="middle" dominant-baseline="central">Admin approval</text><text class="fig-ts" x="390" y="302" text-anchor="middle" dominant-baseline="central">verify + audit log</text></g>
+      <line x1="300" y1="292" x2="180" y2="292" class="fig-arr" marker-end="url(#arw2)"/>
+      <line x1="150" y1="292" x2="150" y2="98" class="fig-arr" marker-end="url(#arw2)"/>
+      <text class="fig-ts" x="150" y="330" text-anchor="middle">rebind to new owner</text>
+
+      <g class="c-red"><rect x="300" y="352" width="180" height="48" rx="8" stroke-width="0.7"/><text class="fig-th" x="390" y="368" text-anchor="middle" dominant-baseline="central">Unauthorized rewrite</text><text class="fig-ts" x="390" y="384" text-anchor="middle" dominant-baseline="central">no state change</text></g>
+      <line x1="300" y1="376" x2="242" y2="376" class="fig-arr" marker-end="url(#arw2)"/>
+      <text class="fig-ts" x="150" y="366" text-anchor="middle">registry ignores it</text>
+      <text class="fig-ts" x="150" y="384" text-anchor="middle">ownership unchanged</text>
+    </svg>
+    <figcaption><span class="fno">Fig 2</span><span>Ownership changes only through the admin-approval node. Unauthorized rewrites map to no transition.</span></figcaption>
+  </figure>
+
+  <p>Two properties define the whole guarantee. First, the only edge into "bound to a new owner" runs through admin approval — verification plus an audit trail. Second, an unauthorized rewrite has no transition at all: bytes on a card changed, but since the registry never consulted those bytes, nothing happened server-side.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">§04</span><h2>Data model</h2></div>
+  <p>The registry is small on purpose — the guarantees come from tight constraints on a few tables, not from complexity. The <span style="color:var(--coral-ink)">ownership-critical tables</span> are outlined in coral.</p>
+
+  <div class="erd">
+    <div class="ent">
+      <h4>ACCOUNTS</h4>
+      <table>
+        <tr><td class="fname">id<span class="key pk">PK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">email<span class="key uk">UK</span></td><td class="ftype">string</td></tr>
+        <tr><td class="fname">full_name</td><td class="ftype">string</td></tr>
+        <tr><td class="fname">status</td><td class="ftype">enum</td></tr>
+        <tr><td class="fname">created_at</td><td class="ftype">timestamp</td></tr>
+      </table>
+    </div>
+
+    <div class="ent core">
+      <h4>CARDS</h4>
+      <table>
+        <tr><td class="fname">id<span class="key pk">PK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">token<span class="key uk">UK</span></td><td class="ftype">string</td></tr>
+        <tr><td class="fname">owner_id<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">profile_id<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">status</td><td class="ftype">enum</td></tr>
+        <tr><td class="fname">chip_locked</td><td class="ftype">bool</td></tr>
+        <tr><td class="fname">batch_id</td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">created_at</td><td class="ftype">timestamp</td></tr>
+      </table>
+    </div>
+
+    <div class="ent">
+      <h4>PROFILES</h4>
+      <table>
+        <tr><td class="fname">id<span class="key pk">PK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">account_id<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">slug<span class="key uk">UK</span></td><td class="ftype">string</td></tr>
+        <tr><td class="fname">template</td><td class="ftype">string</td></tr>
+        <tr><td class="fname">content</td><td class="ftype">jsonb</td></tr>
+        <tr><td class="fname">status</td><td class="ftype">enum</td></tr>
+        <tr><td class="fname">updated_at</td><td class="ftype">timestamp</td></tr>
+      </table>
+    </div>
+
+    <div class="ent core">
+      <h4>OWNERSHIP_TRANSFERS</h4>
+      <table>
+        <tr><td class="fname">id<span class="key pk">PK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">card_id<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">from_account<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">to_account<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">reason</td><td class="ftype">enum</td></tr>
+        <tr><td class="fname">approved_by<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">created_at</td><td class="ftype">timestamp</td></tr>
+      </table>
+    </div>
+
+    <div class="ent">
+      <h4>SUBSCRIPTIONS</h4>
+      <table>
+        <tr><td class="fname">id<span class="key pk">PK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">account_id<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">plan</td><td class="ftype">string</td></tr>
+        <tr><td class="fname">status</td><td class="ftype">enum</td></tr>
+        <tr><td class="fname">stripe_sub_id</td><td class="ftype">string</td></tr>
+        <tr><td class="fname">period_end</td><td class="ftype">timestamp</td></tr>
+      </table>
+    </div>
+
+    <div class="ent">
+      <h4>TAP_EVENTS</h4>
+      <table>
+        <tr><td class="fname">id<span class="key pk">PK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">card_id<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">profile_id<span class="key fk">FK</span></td><td class="ftype">uuid</td></tr>
+        <tr><td class="fname">country</td><td class="ftype">string</td></tr>
+        <tr><td class="fname">referrer</td><td class="ftype">string</td></tr>
+        <tr><td class="fname">occurred_at</td><td class="ftype">timestamp</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h3>Relationships</h3>
+  <ul class="rels">
+    <li><code>accounts</code> → <code>cards</code> <span class="card">one-to-many · owns</span></li>
+    <li><code>accounts</code> → <code>profiles</code> <span class="card">one-to-many · has</span></li>
+    <li><code>accounts</code> → <code>subscriptions</code> <span class="card">one-to-many · billed</span></li>
+    <li><code>profiles</code> → <code>cards</code> <span class="card">one-to-many · served by</span></li>
+    <li><code>cards</code> → <code>ownership_transfers</code> <span class="card">one-to-many · logged</span></li>
+    <li><code>cards</code> → <code>tap_events</code> <span class="card">one-to-many · records</span></li>
+    <li><code>accounts</code> → <code>ownership_transfers</code> <span class="card">three FKs: from_account, to_account, approved_by</span></li>
+  </ul>
+</section>
+
+<section>
+  <div class="sec-head"><span class="sec-no">§05</span><h2>Key design decisions</h2></div>
+  <div class="dl">
+    <h3>Token: long, random, non-enumerable</h3>
+    <p><code>cards.token</code> is the most-hit index in the system — every tap looks it up. Make it 128-bit, base62-encoded (~22 chars), unique and indexed. No one should guess a neighbor's token by incrementing.</p>
+
+    <h3>Deliberate denormalization on the hot path</h3>
+    <p><code>cards</code> carries both <code>owner_id</code> and <code>profile_id</code> even though the owner is derivable through <code>profiles</code>. That lets the resolver answer "who owns this, what do I serve" from a single indexed row read — no joins. The invariant <code>card.owner_id == card.profile.account_id</code> is enforced by the write path, not trusted from callers.</p>
+
+    <h3>Ownership transfers are append-only</h3>
+    <p>Never update or delete a row — only insert. This table is both the audit log and the legal record of who owned a card when. Activation is the first transfer (<code>from_account</code> null); real transfers and lost-card reissues are later rows. Because nothing mutates it, it can't be quietly rewritten.</p>
+
+    <h3>Redirect, don't render, at the token URL</h3>
+    <p>The tap path returns a 302 to a stable profile URL (<code>profiles.slug</code>) rather than rendering at the token URL. Token and profile stay decoupled: a lost-card reissue points a new token at the same profile, and the owner's shared link (QR, email signature) never breaks. The token is disposable; the profile identity is permanent.</p>
+
+    <h3>Status enums + soft delete</h3>
+    <p>Explicit enums (<code>provisioned / active / revoked</code> for cards; <code>active / suspended / deleted</code> for profiles) and soft delete via status rather than hard <code>DELETE</code>, so a revoked card's history survives.</p>
+
+    <h3>Suggested stack</h3>
+    <p>Next.js for server-rendered public profiles and the dashboard; a Go or Node resolver for the hot path; Postgres for the registry and accounts; Redis for token-resolution caching; S3-compatible object storage for assets; Stripe for subscriptions via webhooks. None of it is load-bearing — just the least surprising choices for this shape of system.</p>
+  </div>
+</section>
+
+<footer>
+  NFC Digital Identity Platform · system design reference · diagrams and schema self-contained in this file.
+</footer>
+
+</div>
+</body>
+</html>
