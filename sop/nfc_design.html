@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NFC Digital Identity Platform — Design Document</title>
+<style>
+  :root{
+    --ink:#1f2933; --slate:#3e4c59; --blue:#2c6bed; --bluel:#dbe7ff;
+    --teal:#0f9e8e; --teall:#d6f4ef; --amber:#d9820b; --amberl:#fdeccf;
+    --grey:#9aa5b1; --greyl:#eef1f5; --red:#c33c3c; --green:#2f8f4e;
+    --codebg:#f4f6f8;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); line-height:1.6; margin:0; background:#fff;
+    -webkit-font-smoothing:antialiased;
+  }
+  .page{max-width:820px; margin:0 auto; padding:48px 40px 80px;}
+  header.doc{
+    text-align:center; padding:40px 0 28px; border-bottom:2px solid var(--greyl);
+    margin-bottom:36px;
+  }
+  header.doc h1{font-size:2.3rem; margin:0 0 6px; letter-spacing:-.5px}
+  header.doc .sub{color:var(--blue); font-size:1.15rem; margin:0 0 18px}
+  header.doc .kicker{
+    text-transform:uppercase; letter-spacing:3px; font-size:.72rem;
+    color:var(--slate); border-top:1px solid var(--grey);
+    padding-top:12px; display:inline-block; margin-top:4px;
+  }
+  header.doc .meta{color:var(--slate); font-size:.85rem; margin-top:8px}
+
+  h2{font-size:1.5rem; color:var(--blue); border-bottom:2px solid var(--bluel);
+     padding-bottom:6px; margin:44px 0 14px}
+  h3{font-size:1.12rem; margin:26px 0 10px}
+  p{margin:0 0 12px}
+  ul{margin:0 0 14px; padding-left:22px}
+  li{margin:4px 0}
+  code,.mono{font-family:"SF Mono",Consolas,Menlo,monospace; font-size:.9em}
+  strong{font-weight:650}
+
+  /* nav / code blocks */
+  pre{
+    background:var(--codebg); border:1px solid var(--grey); border-radius:6px;
+    padding:14px 16px; overflow-x:auto; font-family:"SF Mono",Consolas,Menlo,monospace;
+    font-size:.82rem; line-height:1.5; color:var(--ink); margin:8px 0 18px;
+  }
+
+  /* tables */
+  table{border-collapse:collapse; width:100%; margin:10px 0 22px; font-size:.9rem}
+  th{background:var(--blue); color:#fff; text-align:left; padding:8px 12px; font-weight:600}
+  td{padding:8px 12px; border-bottom:1px solid #d2d9e0; vertical-align:top}
+  tbody tr:nth-child(even){background:var(--greyl)}
+  table.slate th{background:var(--slate)}
+  table.teal th{background:var(--teal)}
+  .tag{font-family:"SF Mono",Consolas,monospace; font-size:.82rem; font-weight:600}
+  .m-get{color:var(--green)} .m-post{color:var(--amber)} .m-put{color:var(--blue)}
+  .yes{color:var(--green); font-weight:700; text-align:center; background:var(--teall)}
+  .no{color:var(--red); font-weight:700; text-align:center; background:var(--amberl)}
+  td.center{text-align:center}
+
+  /* callouts */
+  .callout{border-radius:6px; padding:14px 18px; margin:18px 0; border-left:6px solid}
+  .callout .t{font-weight:700; margin-bottom:4px; font-size:.95rem}
+  .callout.teal{background:var(--teall); border-color:var(--teal)} .callout.teal .t{color:var(--teal)}
+  .callout.blue{background:var(--bluel); border-color:var(--blue)} .callout.blue .t{color:var(--blue)}
+  .callout.amber{background:var(--amberl); border-color:var(--amber)} .callout.amber .t{color:var(--amber)}
+
+  /* figures */
+  figure{margin:18px 0 24px; text-align:center}
+  figure svg{max-width:100%; height:auto}
+  figcaption{font-size:.8rem; color:var(--slate); font-style:italic; margin-top:6px}
+  .fig-title{font-weight:700; font-size:.95rem; margin-bottom:6px; text-align:left}
+
+  @media print{.page{max-width:none} h2{page-break-after:avoid}}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="doc">
+  <h1>NFC Digital Identity Platform</h1>
+  <p class="sub">Dashboard Design, NFC Chip Security, and Backend Approach</p>
+  <div class="kicker">Technical Design Document</div>
+  <div class="meta">Version 1.0 &nbsp;·&nbsp; July 2026</div>
+</header>
+
+<!-- ================= OVERVIEW ================= -->
+<h2>Overview</h2>
+<p>This document consolidates the design discussion for an <strong>NFC digital identity platform</strong> — a system where a physical NFC card (a tap-enabled chip embedded in a card) resolves to a hosted digital profile. It answers three questions raised during design:</p>
+<ul>
+  <li>What should the <strong>owner and admin dashboards</strong> contain?</li>
+  <li>Can an <strong>NFC chip be unlocked</strong> once it has been permanently locked?</li>
+  <li>How should the <strong>backend</strong> be approached, given the logical flow already defined?</li>
+</ul>
+<div class="callout teal">
+  <div class="t">Core security principle</div>
+  <p style="margin:0"><strong>Ownership is verified server-side, not on the card.</strong> Even if someone rewrites a card's NFC memory, they cannot take over an account — the token only points to a record the server controls. This single idea shapes both the chip-locking decision and the backend design.</p>
+</div>
+
+<!-- ================= 1. DASHBOARD ================= -->
+<h2>1.&nbsp; Dashboard Design</h2>
+<p>The original system-design document referenced the owner/admin role only at a high level ("Owner/Admin — edit, manage") and did not enumerate the dashboard pages. The structure below fills that gap. Each section maps directly to a table in the data model (Section&nbsp;3.4).</p>
+
+<h3>1.1&nbsp; Owner dashboard — navigation</h3>
+<p>The owner-facing dashboard is organised into eight top-level sections:</p>
+<pre>Dashboard
+├── Home            (summary + recent activity)
+├── My Profile      (edit content, live preview)
+├── My NFC Cards    (registered cards + status)
+├── Analytics       (taps, geography, referrers)
+├── Ownership       (transfers, lost-card reports)
+├── Subscription    (plan, billing, invoices)
+├── Security        (password, OTP, sessions)
+└── Settings        (slug, theme, privacy, delete)</pre>
+
+<h3>1.2&nbsp; Owner dashboard — section contents</h3>
+<table>
+  <thead><tr><th style="width:18%">Section</th><th style="width:56%">Key contents</th><th style="width:26%">Backing table</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Home</strong></td><td>Total / active / revoked card counts, total profile views (taps), current subscription status, recent activity feed</td><td class="mono">— (aggregates)</td></tr>
+    <tr><td><strong>My Profile</strong></td><td>Personal details, profile picture, bio, social links, contact info, resume/portfolio upload, live profile preview</td><td class="mono">profiles</td></tr>
+    <tr><td><strong>My NFC Cards</strong></td><td>Card list: token (partially hidden), status (Provisioned / Active / Revoked), chip-locked flag, assigned profile, activation date</td><td class="mono">cards</td></tr>
+    <tr><td><strong>Analytics</strong></td><td>Total taps, daily/weekly/monthly trends, country breakdown, referrer sources, recent tap history</td><td class="mono">tap_events</td></tr>
+    <tr><td><strong>Ownership</strong></td><td>Current owner, transfer request, transfer history, lost-card reporting, replacement request</td><td class="mono">ownership_transfers</td></tr>
+    <tr><td><strong>Subscription</strong></td><td>Current plan, renewal date, payment status, upgrade/downgrade, billing history</td><td class="mono">subscriptions</td></tr>
+    <tr><td><strong>Security</strong></td><td>Login password, OTP settings, connected devices/sessions, change email, change password</td><td class="mono">auth / sessions</td></tr>
+    <tr><td><strong>Settings</strong></td><td>Profile URL (slug), theme/template, privacy options, delete/deactivate profile</td><td class="mono">profiles</td></tr>
+  </tbody>
+</table>
+
+<h3>1.3&nbsp; Admin dashboard</h3>
+<p>A separate administrative surface manages the platform itself. Admin approval is the central security mechanism for any ownership change.</p>
+<table class="slate">
+  <thead><tr><th style="width:34%">Capability</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Manage users</strong></td><td>Search, view, suspend, or delete accounts</td></tr>
+    <tr><td><strong>Manage NFC cards</strong></td><td>Provision, assign, and inspect cards across the fleet</td></tr>
+    <tr><td><strong>Approve ownership transfers</strong></td><td>Review and approve/deny transfer requests (the key control)</td></tr>
+    <tr><td><strong>Revoke cards</strong></td><td>Immediately invalidate a lost or compromised card</td></tr>
+    <tr><td><strong>Issue replacement cards</strong></td><td>Bind a new token to an existing profile</td></tr>
+    <tr><td><strong>View analytics</strong></td><td>Platform-wide usage and health metrics</td></tr>
+    <tr><td><strong>Manage subscriptions</strong></td><td>Handle billing edge cases and plan overrides</td></tr>
+    <tr><td><strong>Audit logs</strong></td><td>Immutable record of sensitive actions for traceability</td></tr>
+  </tbody>
+</table>
+
+<!-- ================= 2. NFC LOCKING ================= -->
+<h2>2.&nbsp; NFC Chip Locking — Can a Locked Chip Be Unlocked?</h2>
+<p>Short answer: for the common tags, <strong style="color:var(--red)">no.</strong> Once an NFC tag is <strong>permanently locked</strong> by programming its OTP (One-Time Programmable) lock bits, it becomes read-only in hardware and cannot be reverted. This is a deliberate anti-tamper feature.</p>
+
+<h3>2.1&nbsp; Two kinds of protection</h3>
+<table>
+  <thead><tr><th style="width:26%">Mechanism</th><th style="width:46%">Behaviour</th><th style="width:28%">Reversible?</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Password protection</strong></td><td>Tag requires a password before writing; password can be changed or removed later if known</td><td class="yes">Yes</td></tr>
+    <tr><td><strong>Permanent read-only lock</strong></td><td>OTP lock bits programmed once; tag becomes permanently read-only</td><td class="no">No</td></tr>
+  </tbody>
+</table>
+
+<h3>2.2&nbsp; Behaviour by chip</h3>
+<table class="slate">
+  <thead><tr><th style="width:32%">Chip</th><th>Lock behaviour</th></tr></thead>
+  <tbody>
+    <tr><td class="mono">NTAG213 / 215 / 216</td><td>Support permanent lock bits. Once locked, cannot be unlocked.</td></tr>
+    <tr><td class="mono">MIFARE Ultralight</td><td>Similar — permanent lock bits are irreversible.</td></tr>
+    <tr><td class="mono">NTAG424 DNA</td><td>Secure chip with configurable features (e.g., SUN/tamper), but permanent lock bits remain permanent.</td></tr>
+  </tbody>
+</table>
+
+<h3>2.3&nbsp; Recommendation for this platform</h3>
+<div class="callout blue">
+  <div class="t">You don't need to lock the chip for security</div>
+  <p style="margin:0">The backend already guarantees that rewriting a card cannot hijack an account, because ownership is resolved server-side from the token. Locking is therefore an operational choice, not a security requirement.</p>
+</div>
+<p>Practical policy:</p>
+<ul>
+  <li><strong>During development:</strong> leave tags unlocked so they can be reprogrammed freely.</li>
+  <li><strong>Before shipping to customers,</strong> choose one of:
+    <ul>
+      <li>enable <strong>password protection</strong> if the token may need future updates, or</li>
+      <li>apply a <strong>permanent lock</strong> if the token will never change.</li>
+    </ul>
+  </li>
+</ul>
+
+<!-- ================= 3. BACKEND ================= -->
+<h2>3.&nbsp; Backend Approach</h2>
+<p>The design document defines the <strong>logical flow and the components</strong> but does not specify API endpoints or how the frontend talks to the backend. This section proposes a concrete approach built on the components already named: Resolver, Auth&nbsp;+&nbsp;OTP, Profile management, Ownership management, PostgreSQL, Redis, Object Storage, and Stripe.</p>
+
+<h3>3.1&nbsp; System architecture</h3>
+<p>The system separates a lightweight, ultra-fast redirect path (the Resolver) from the heavier application services. Redis caches hot token→profile lookups so a tap resolves without always hitting PostgreSQL.</p>
+<figure>
+  <div class="fig-title">Figure 1. System architecture — tiers and data flow</div>
+  <svg viewBox="0 0 720 430" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+    <defs>
+      <marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#3e4c59"/></marker>
+      <marker id="ahb" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#2c6bed"/></marker>
+      <marker id="aha" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+        <path d="M0,0 L8,3 L0,6 Z" fill="#d9820b"/></marker>
+    </defs>
+    <!-- client -->
+    <rect x="30" y="20" width="150" height="52" rx="6" fill="#fdeccf" stroke="#d9820b" stroke-width="1.5"/>
+    <text x="105" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2933">NFC Card</text>
+    <text x="105" y="58" text-anchor="middle" font-size="11" fill="#1f2933">(NTAG chip)</text>
+    <rect x="215" y="20" width="180" height="52" rx="6" fill="#eef1f5" stroke="#9aa5b1" stroke-width="1.5"/>
+    <text x="305" y="42" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2933">Phone Browser</text>
+    <text x="305" y="58" text-anchor="middle" font-size="11" fill="#1f2933">(opens token URL)</text>
+    <!-- edge -->
+    <rect x="215" y="120" width="180" height="50" rx="6" fill="#dbe7ff" stroke="#2c6bed" stroke-width="1.5"/>
+    <text x="305" y="141" text-anchor="middle" font-size="13" font-weight="700" fill="#1f2933">Resolver</text>
+    <text x="305" y="157" text-anchor="middle" font-size="11" fill="#1f2933">(HTTP 302 redirect)</text>
+    <!-- app services -->
+    <g fill="#d6f4ef" stroke="#0f9e8e" stroke-width="1.5">
+      <rect x="20"  y="220" width="145" height="46" rx="6"/>
+      <rect x="185" y="220" width="145" height="46" rx="6"/>
+      <rect x="350" y="220" width="150" height="46" rx="6"/>
+      <rect x="520" y="220" width="150" height="46" rx="6"/>
+    </g>
+    <g font-size="12" fill="#1f2933" text-anchor="middle">
+      <text x="92"  y="247">Auth + OTP</text>
+      <text x="257" y="240">Profile</text><text x="257" y="255">Management</text>
+      <text x="425" y="240">Ownership</text><text x="425" y="255">Management</text>
+      <text x="595" y="240">Analytics</text><text x="595" y="255">(tap ingest)</text>
+    </g>
+    <!-- data -->
+    <g stroke-width="1.5">
+      <rect x="30"  y="330" width="120" height="46" rx="6" fill="#dbe7ff" stroke="#2c6bed"/>
+      <rect x="170" y="330" width="110" height="46" rx="6" fill="#dbe7ff" stroke="#2c6bed"/>
+      <rect x="300" y="330" width="140" height="46" rx="6" fill="#dbe7ff" stroke="#2c6bed"/>
+      <rect x="460" y="330" width="120" height="46" rx="6" fill="#fdeccf" stroke="#d9820b"/>
+    </g>
+    <g font-size="12" fill="#1f2933" text-anchor="middle">
+      <text x="90"  y="357">PostgreSQL</text>
+      <text x="225" y="350">Redis</text><text x="225" y="365">(cache)</text>
+      <text x="370" y="350">Object Storage</text><text x="370" y="365">(media)</text>
+      <text x="520" y="350">Stripe</text><text x="520" y="365">(billing)</text>
+    </g>
+    <!-- tier labels -->
+    <g font-size="9" font-weight="700" fill="#9aa5b1" text-anchor="end">
+      <text x="700" y="50">CLIENT</text><text x="700" y="148">EDGE</text>
+      <text x="700" y="247">APP SERVICES</text><text x="700" y="357">DATA / EXTERNAL</text>
+    </g>
+    <!-- arrows -->
+    <line x1="180" y1="46" x2="212" y2="46" stroke="#d9820b" stroke-width="2" marker-end="url(#aha)"/>
+    <text x="196" y="38" font-size="10" fill="#d9820b" text-anchor="middle">tap</text>
+    <line x1="305" y1="72" x2="305" y2="117" stroke="#9aa5b1" stroke-width="2" marker-end="url(#ah)"/>
+    <line x1="305" y1="170" x2="257" y2="217" stroke="#2c6bed" stroke-width="1.5" marker-end="url(#ahb)"/>
+    <line x1="280" y1="170" x2="105" y2="217" stroke="#2c6bed" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ahb)"/>
+    <line x1="330" y1="170" x2="410" y2="217" stroke="#2c6bed" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ahb)"/>
+    <line x1="340" y1="170" x2="580" y2="217" stroke="#2c6bed" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#ahb)"/>
+    <line x1="92"  y1="266" x2="90"  y2="327" stroke="#3e4c59" stroke-width="1.5" marker-end="url(#ah)"/>
+    <line x1="257" y1="266" x2="230" y2="327" stroke="#3e4c59" stroke-width="1.5" marker-end="url(#ah)"/>
+    <line x1="270" y1="266" x2="360" y2="327" stroke="#3e4c59" stroke-width="1.5" marker-end="url(#ah)"/>
+    <line x1="595" y1="266" x2="240" y2="327" stroke="#3e4c59" stroke-width="1.5" marker-end="url(#ah)"/>
+    <line x1="440" y1="266" x2="515" y2="327" stroke="#d9820b" stroke-width="1.5" marker-end="url(#aha)"/>
+  </svg>
+  <figcaption>Figure 1 — Client, edge, application, and data tiers.</figcaption>
+</figure>
+
+<h3>3.2&nbsp; The tap-to-profile flow</h3>
+<p>This is the single most important path in the product and must be fast and reliable. The sequence below expands the logical flow from the design document into concrete steps.</p>
+<figure>
+  <div class="fig-title">Figure 2. Tap-to-profile resolution sequence</div>
+  <svg viewBox="0 0 720 340" xmlns="http://www.w3.org/2000/svg" font-family="inherit">
+    <defs>
+      <marker id="s1" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#d9820b"/></marker>
+      <marker id="s2" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2c6bed"/></marker>
+      <marker id="s3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#3e4c59"/></marker>
+      <marker id="s4" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#0f9e8e"/></marker>
+      <marker id="s5" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#2f8f4e"/></marker>
+    </defs>
+    <!-- actors -->
+    <g font-size="11" font-weight="700" fill="#1f2933" text-anchor="middle">
+      <g fill="#eef1f5" stroke="#9aa5b1"><rect x="30"  y="10" width="90" height="34" rx="4"/>
+      <rect x="185" y="10" width="90" height="34" rx="4"/><rect x="340" y="10" width="90" height="34" rx="4"/>
+      <rect x="490" y="10" width="100" height="34" rx="4"/><rect x="640" y="10" width="70" height="34" rx="4"/></g>
+      <text x="75"  y="31">User+Card</text><text x="230" y="31">Phone</text><text x="385" y="31">Resolver</text>
+      <text x="540" y="27">Ownership</text><text x="540" y="39">Registry</text><text x="675" y="27">Profile</text><text x="675" y="39">Store</text>
+    </g>
+    <!-- lifelines -->
+    <g stroke="#9aa5b1" stroke-width="1" stroke-dasharray="4 3">
+      <line x1="75" y1="44" x2="75" y2="320"/><line x1="230" y1="44" x2="230" y2="320"/>
+      <line x1="385" y1="44" x2="385" y2="320"/><line x1="540" y1="44" x2="540" y2="320"/><line x1="675" y1="44" x2="675" y2="320"/>
+    </g>
+    <!-- messages -->
+    <g font-size="10" fill="#1f2933">
+      <line x1="75"  y1="75"  x2="227" y2="75"  stroke="#d9820b" stroke-width="1.5" marker-end="url(#s1)"/><text x="150" y="69" text-anchor="middle">1. Tap card (NFC)</text>
+      <line x1="230" y1="110" x2="382" y2="110" stroke="#2c6bed" stroke-width="1.5" marker-end="url(#s2)"/><text x="306" y="104" text-anchor="middle">2. GET /t/{token}</text>
+      <line x1="385" y1="145" x2="537" y2="145" stroke="#3e4c59" stroke-width="1.5" marker-end="url(#s3)"/><text x="461" y="139" text-anchor="middle">3. Lookup token</text>
+      <line x1="540" y1="180" x2="388" y2="180" stroke="#3e4c59" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#s3)"/><text x="464" y="174" text-anchor="middle">4. owner + slug</text>
+      <line x1="385" y1="215" x2="233" y2="215" stroke="#2c6bed" stroke-width="1.5" marker-end="url(#s2)"/><text x="309" y="209" text-anchor="middle">5. HTTP 302 → /p/{slug}</text>
+      <line x1="230" y1="250" x2="672" y2="250" stroke="#0f9e8e" stroke-width="1.5" marker-end="url(#s4)"/><text x="450" y="244" text-anchor="middle">6. GET profile content</text>
+      <line x1="675" y1="285" x2="233" y2="285" stroke="#0f9e8e" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#s4)"/><text x="450" y="279" text-anchor="middle">7. Rendered profile</text>
+      <line x1="385" y1="255" x2="385" y2="315" stroke="#2f8f4e" stroke-width="1.5" stroke-dasharray="3 3" marker-end="url(#s5)"/><text x="392" y="312" fill="#2f8f4e">8. log tap event (async)</text>
+    </g>
+  </svg>
+  <figcaption>Figure 2 — What happens between the tap and the rendered profile.</figcaption>
+</figure>
+<p>Step by step:</p>
+<ul>
+  <li>The user taps the card; the phone opens a URL containing the token, e.g. <code>https://tap.example.com/t/{token}</code></li>
+  <li>The Resolver receives the token and looks it up (Redis first, then PostgreSQL).</li>
+  <li>If the token is valid and the card is Active, it resolves to the owner's profile slug.</li>
+  <li>The Resolver returns an <strong>HTTP 302</strong> redirect to <code>/p/{slug}</code>.</li>
+  <li>The profile page loads its content from the Profile Store (media from Object Storage).</li>
+  <li>The tap event is logged <strong>asynchronously</strong> so analytics never slow the redirect.</li>
+</ul>
+
+<h3>3.3&nbsp; Suggested API endpoints</h3>
+<p>A REST layer grouped by the components already in the design. Public resolution is separated from authenticated owner and admin operations.</p>
+<table>
+  <thead><tr><th style="width:11%">Method</th><th style="width:37%">Endpoint</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td class="tag m-get">GET</td><td class="mono">/t/{token}</td><td>Resolve tap → 302 redirect to profile (Resolver)</td></tr>
+    <tr><td class="tag m-get">GET</td><td class="mono">/p/{slug}</td><td>Public profile page content</td></tr>
+    <tr><td class="tag m-post">POST</td><td class="mono">/auth/login</td><td>Start login (email + password)</td></tr>
+    <tr><td class="tag m-post">POST</td><td class="mono">/auth/otp/verify</td><td>Verify OTP, issue session token</td></tr>
+    <tr><td class="tag m-get">GET</td><td class="mono">/me/profile</td><td>Fetch the owner's editable profile</td></tr>
+    <tr><td class="tag m-put">PUT</td><td class="mono">/me/profile</td><td>Update profile fields</td></tr>
+    <tr><td class="tag m-post">POST</td><td class="mono">/me/profile/media</td><td>Upload picture / resume → Object Storage</td></tr>
+    <tr><td class="tag m-get">GET</td><td class="mono">/me/cards</td><td>List the owner's registered cards</td></tr>
+    <tr><td class="tag m-get">GET</td><td class="mono">/me/analytics</td><td>Aggregated tap analytics</td></tr>
+    <tr><td class="tag m-post">POST</td><td class="mono">/me/cards/{id}/transfer</td><td>Request ownership transfer</td></tr>
+    <tr><td class="tag m-post">POST</td><td class="mono">/me/cards/{id}/report-lost</td><td>Report a lost card</td></tr>
+    <tr><td class="tag m-get">GET</td><td class="mono">/me/subscription</td><td>Current plan + billing history (Stripe)</td></tr>
+    <tr><td class="tag m-post">POST</td><td class="mono">/admin/transfers/{id}/approve</td><td>Admin approves a transfer</td></tr>
+    <tr><td class="tag m-post">POST</td><td class="mono">/admin/cards/{id}/revoke</td><td>Admin revokes a card</td></tr>
+  </tbody>
+</table>
+
+<p><strong>Example — resolver response</strong> <code>(GET /t/{token})</code></p>
+<pre>GET /t/aE7fK2pQ HTTP/1.1
+Host: tap.example.com
+
+HTTP/1.1 302 Found
+Location: https://example.com/p/jane-doe
+Cache-Control: no-store</pre>
+
+<p><strong>Example — update profile</strong> <code>(PUT /me/profile)</code></p>
+<pre>PUT /me/profile HTTP/1.1
+Authorization: Bearer &lt;session-token&gt;
+Content-Type: application/json
+
+{
+  "display_name": "Jane Doe",
+  "bio": "Product designer.",
+  "links": {
+    "linkedin": "https://linkedin.com/in/janedoe",
+    "github":   "https://github.com/janedoe"
+  },
+  "theme": "midnight"
+}</pre>
+
+<h3>3.4&nbsp; Data model</h3>
+<p>Five core tables in PostgreSQL. The token lives on the card and is the only thing written to the chip; everything the server trusts hangs off these records.</p>
+<figure>
+  <div class="fig-title">Figure 4. Core data model</div>
+  <svg viewBox="0 0 720 420" xmlns="http://www.w3.org/2000/svg" font-family="inherit" font-size="11">
+    <defs>
+      <marker id="rel" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#0f9e8e"/></marker>
+      <marker id="rela" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#d9820b"/></marker>
+    </defs>
+    <!-- profiles -->
+    <g>
+      <rect x="20" y="20" width="180" height="24" fill="#dbe7ff" stroke="#3e4c59"/>
+      <rect x="20" y="44" width="180" height="154" fill="#fff" stroke="#3e4c59"/>
+      <text x="110" y="37" text-anchor="middle" font-weight="700" fill="#2c6bed">profiles</text>
+      <g fill="#1f2933"><text x="28" y="62">PK id</text><text x="28" y="84">slug (unique)</text>
+      <text x="28" y="106">display_name</text><text x="28" y="128">bio</text>
+      <text x="28" y="150">links (json)</text><text x="28" y="172">theme</text><text x="28" y="194">media_url</text></g>
+    </g>
+    <!-- cards -->
+    <g>
+      <rect x="270" y="20" width="180" height="24" fill="#dbe7ff" stroke="#3e4c59"/>
+      <rect x="270" y="44" width="180" height="132" fill="#fff" stroke="#3e4c59"/>
+      <text x="360" y="37" text-anchor="middle" font-weight="700" fill="#2c6bed">cards</text>
+      <g fill="#1f2933"><text x="278" y="62">PK id</text><text x="278" y="84">token (unique)</text>
+      <text x="278" y="106">FK profile_id</text><text x="278" y="128">status</text>
+      <text x="278" y="150">chip_locked</text><text x="278" y="172">activated_at</text></g>
+    </g>
+    <!-- subscriptions -->
+    <g>
+      <rect x="520" y="20" width="180" height="24" fill="#dbe7ff" stroke="#3e4c59"/>
+      <rect x="520" y="44" width="180" height="132" fill="#fff" stroke="#3e4c59"/>
+      <text x="610" y="37" text-anchor="middle" font-weight="700" fill="#2c6bed">subscriptions</text>
+      <g fill="#1f2933"><text x="528" y="62">PK id</text><text x="528" y="84">FK profile_id</text>
+      <text x="528" y="106">plan</text><text x="528" y="128">status</text>
+      <text x="528" y="150">renewal_date</text><text x="528" y="172">stripe_id</text></g>
+    </g>
+    <!-- tap_events -->
+    <g>
+      <rect x="150" y="250" width="180" height="24" fill="#dbe7ff" stroke="#3e4c59"/>
+      <rect x="150" y="274" width="180" height="132" fill="#fff" stroke="#3e4c59"/>
+      <text x="240" y="267" text-anchor="middle" font-weight="700" fill="#2c6bed">tap_events</text>
+      <g fill="#1f2933"><text x="158" y="292">PK id</text><text x="158" y="314">FK card_id</text>
+      <text x="158" y="336">ts</text><text x="158" y="358">country</text>
+      <text x="158" y="380">referrer</text><text x="158" y="402">user_agent</text></g>
+    </g>
+    <!-- ownership_transfers -->
+    <g>
+      <rect x="400" y="250" width="200" height="24" fill="#dbe7ff" stroke="#3e4c59"/>
+      <rect x="400" y="274" width="200" height="132" fill="#fff" stroke="#3e4c59"/>
+      <text x="500" y="267" text-anchor="middle" font-weight="700" fill="#2c6bed">ownership_transfers</text>
+      <g fill="#1f2933"><text x="408" y="292">PK id</text><text x="408" y="314">FK card_id</text>
+      <text x="408" y="336">from_user / to_user</text><text x="408" y="358">status</text>
+      <text x="408" y="380">approved_by</text><text x="408" y="402">created_at</text></g>
+    </g>
+    <!-- relationships -->
+    <line x1="270" y1="100" x2="203" y2="100" stroke="#0f9e8e" stroke-width="1.5" marker-end="url(#rel)"/>
+    <line x1="520" y1="100" x2="453" y2="100" stroke="#0f9e8e" stroke-width="1.5" marker-end="url(#rel)"/>
+    <line x1="290" y1="250" x2="330" y2="180" stroke="#d9820b" stroke-width="1.5" marker-end="url(#rela)"/>
+    <line x1="450" y1="250" x2="400" y2="180" stroke="#d9820b" stroke-width="1.5" marker-end="url(#rela)"/>
+  </svg>
+  <figcaption>Figure 4 — Primary keys, foreign keys, and key columns per table.</figcaption>
+</figure>
+
+<h3>3.5&nbsp; Analytics (example views)</h3>
+<p>Tap events are written asynchronously and aggregated for the Analytics section of the dashboard. Because writes are off the redirect path, the resolver stays fast even under load. Sample dashboard views:</p>
+<figure>
+  <div class="fig-title">Figure 3. Example analytics dashboard views (sample data)</div>
+  <svg viewBox="0 0 720 260" xmlns="http://www.w3.org/2000/svg" font-family="inherit" font-size="11">
+    <!-- weekly taps bar chart -->
+    <text x="30" y="20" font-weight="700" fill="#1f2933">Weekly taps</text>
+    <line x1="45" y1="30" x2="45" y2="210" stroke="#9aa5b1"/>
+    <line x1="45" y1="210" x2="360" y2="210" stroke="#9aa5b1"/>
+    <!-- bars: values 42 55 61 48 73 90 66, scale max 100 -> 170px -->
+    <g fill="#2c6bed">
+      <rect x="60"  y="138.6" width="30" height="71.4"/>
+      <rect x="103" y="116.5" width="30" height="93.5"/>
+      <rect x="146" y="106.3" width="30" height="103.7"/>
+      <rect x="189" y="128.4" width="30" height="81.6"/>
+      <rect x="232" y="85.9"  width="30" height="124.1"/>
+      <rect x="275" y="57.0"  width="30" height="153.0"/>
+      <rect x="318" y="97.8"  width="30" height="112.2"/>
+    </g>
+    <polyline fill="none" stroke="#d9820b" stroke-width="2"
+      points="75,138.6 118,116.5 161,106.3 204,128.4 247,85.9 290,57 333,97.8"/>
+    <g fill="#1f2933" text-anchor="middle" font-size="10">
+      <text x="75" y="133">42</text><text x="118" y="111">55</text><text x="161" y="101">61</text>
+      <text x="204" y="123">48</text><text x="247" y="80">73</text><text x="290" y="52">90</text><text x="333" y="93">66</text>
+      <text x="75" y="224">Mon</text><text x="118" y="224">Tue</text><text x="161" y="224">Wed</text>
+      <text x="204" y="224">Thu</text><text x="247" y="224">Fri</text><text x="290" y="224">Sat</text><text x="333" y="224">Sun</text>
+    </g>
+    <!-- visitors by country -->
+    <text x="430" y="20" font-weight="700" fill="#1f2933">Visitors by country</text>
+    <g font-size="10" fill="#1f2933">
+      <text x="430" y="52">India</text><text x="430" y="82">USA</text><text x="430" y="112">UAE</text>
+      <text x="430" y="142">UK</text><text x="430" y="172">Other</text>
+    </g>
+    <!-- bars scale 46% -> 230px width, base x=470 -->
+    <rect x="470" y="42"  width="230" height="16" fill="#2c6bed"/>
+    <rect x="470" y="72"  width="110" height="16" fill="#0f9e8e"/>
+    <rect x="470" y="102" width="70"  height="16" fill="#d9820b"/>
+    <rect x="470" y="132" width="50"  height="16" fill="#7b61ff"/>
+    <rect x="470" y="162" width="40"  height="16" fill="#9aa5b1"/>
+    <g font-size="10" fill="#1f2933">
+      <text x="706" y="55">46%</text><text x="586" y="85">22%</text><text x="546" y="115">14%</text>
+      <text x="526" y="145">10%</text><text x="516" y="175">8%</text>
+    </g>
+  </svg>
+  <figcaption>Figure 3 — Weekly tap trend and visitor geography (sample data).</figcaption>
+</figure>
+
+<h3>3.6&nbsp; Suggested build sequence</h3>
+<p>A pragmatic order that gets the core product working first and defers the rest:</p>
+<table class="teal">
+  <thead><tr><th style="width:8%">#</th><th style="width:34%">Milestone</th><th>Delivers</th></tr></thead>
+  <tbody>
+    <tr><td class="center"><strong>1</strong></td><td><strong>Resolver + data model</strong></td><td>Tap → 302 redirect to a static profile (the core magic)</td></tr>
+    <tr><td class="center"><strong>2</strong></td><td><strong>Auth + OTP</strong></td><td>Owners can log in and manage their own account</td></tr>
+    <tr><td class="center"><strong>3</strong></td><td><strong>Profile management</strong></td><td>Editable profiles + media upload to Object Storage</td></tr>
+    <tr><td class="center"><strong>4</strong></td><td><strong>Analytics</strong></td><td>Async tap logging + dashboard aggregates</td></tr>
+    <tr><td class="center"><strong>5</strong></td><td><strong>Ownership + admin</strong></td><td>Transfers, revocation, replacement, approvals, audit logs</td></tr>
+    <tr><td class="center"><strong>6</strong></td><td><strong>Subscriptions</strong></td><td>Stripe billing, plans, invoices</td></tr>
+  </tbody>
+</table>
+
+<div class="callout amber">
+  <div class="t">Next step</div>
+  <p style="margin:0"><strong>Start with Milestone 1.</strong> A working resolver plus the <code>cards</code> and <code>profiles</code> tables proves the end-to-end tap experience with the least code, and everything else layers on top of it.</p>
+</div>
+
+</div>
+</body>
+</html>
